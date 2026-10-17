@@ -38,6 +38,7 @@ object StormDnsConfigRenderer {
         serverProfile: StormDnsServerProfile,
         settings: WhiteDnsSettings,
     ): String {
+        if (serverProfile.engine == DnsClientEngine.Soar) return SoarConfigRenderer.render(serverProfile, settings)
         val resolved = settings.resolve()
 
         return buildString {
@@ -58,6 +59,7 @@ object StormDnsConfigRenderer {
         serverProfile: StormDnsServerProfile,
         settings: WhiteDnsSettings,
     ): String {
+        if (serverProfile.engine == DnsClientEngine.Soar) return SoarConfigRenderer.render(serverProfile, settings)
         val resolved = settings.copy(
             startupMode = "resolvers",
             trafficWarmupEnabled = false,
@@ -250,6 +252,7 @@ object StormDnsConfigRenderer {
             encryptionMethod = customServerEncryptionMethod.coerceIn(0, 5),
             engine = DnsClientEngine.normalize(engine),
             cottenSettings = cottenSettings.normalized(),
+            soarSettings = soarSettings.normalized(),
         )
     }
 }

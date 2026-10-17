@@ -194,7 +194,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        val ProfileLinkSchemes = setOf("masterdns", "stormdns", "cottendns")
+        val ProfileLinkSchemes = setOf("masterdns", "stormdns", "cottendns", "soar")
         const val ExtraProfileImportHandled = "shop.whitedns.client.extra.PROFILE_IMPORT_HANDLED"
     }
 }

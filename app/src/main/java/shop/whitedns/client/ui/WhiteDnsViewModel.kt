@@ -45,6 +45,7 @@ import shop.whitedns.client.model.ConnectionStatus
 import shop.whitedns.client.model.ConnectionVerificationState
 import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.DnsClientEngine
+import shop.whitedns.client.model.canDiscoverSoarResolvers
 import shop.whitedns.client.model.ResolverProfile
 import shop.whitedns.client.model.ResolverRuntimeState
 import shop.whitedns.client.model.ServerDomains
@@ -338,7 +339,7 @@ class WhiteDnsViewModel(
             connectionVerification = ConnectionVerificationState(),
             autoTuneTrialResults = emptyList(),
             serverTestState = ServerTestState(),
-            connectionLogs = listOf("Starting StormDNS"),
+            connectionLogs = listOf("Starting ${DnsClientEngine.displayName(uiState.settings.selectedConnectionProfile().engine)}"),
         )
         activeVpnTrafficInterfaceName = null
         resetTrafficAccounting()
@@ -353,7 +354,7 @@ class WhiteDnsViewModel(
                 stopServerTestManagers()
             }
             val settings = uiState.settings.syncSelectedConnectionProfileFields()
-            if (settings.resolve().resolverEntries.isEmpty()) {
+            if (settings.resolve().resolverEntries.isEmpty() && !settings.canDiscoverSoarResolvers()) {
                 appendLog("Resolvers are required to connect")
                 activeRuntimeSessionId = ""
                 uiState = uiState.copy(
@@ -391,7 +392,7 @@ class WhiteDnsViewModel(
             activeServerProfile = serverProfile
             val runtimeSettings = settings.runtimeConnectionSettings()
             val resolvedRuntimeSettings = runtimeSettings.resolve()
-            val useParallelTest = settings.autoTuneEnabled &&
+            val useParallelTest = connectionProfile.engine != DnsClientEngine.Soar && settings.autoTuneEnabled &&
                 resolvedRuntimeSettings.connectionMode in ParallelTestConnectionModes
             uiState = uiState.copy(
                 settings = settings,
@@ -459,9 +460,9 @@ class WhiteDnsViewModel(
                 }
                 appendLog(
                     if (connectionProfile.serverMode == "custom") {
-                        "Using custom StormDNS server"
+                        "Using custom ${DnsClientEngine.displayName(connectionProfile.engine)} server"
                     } else {
-                        "Using configured StormDNS server"
+                        "Using configured ${DnsClientEngine.displayName(connectionProfile.engine)} server"
                     },
                 )
                 appendLog("Connection mode: $modeLabel")
@@ -1258,6 +1259,7 @@ class WhiteDnsViewModel(
     private fun detectStormDnsStartupFailure(line: String): String? {
         val normalized = line.lowercase()
         return when {
+            line.startsWith("SOAR_ERROR:") -> line.removePrefix("SOAR_ERROR:").trim()
             "no valid connections found after mtu testing" in normalized ||
                 "mtu tests failed: no valid connections" in normalized ||
                 "no valid connections after mtu testing" in normalized ->
@@ -2518,6 +2520,7 @@ class WhiteDnsViewModel(
             encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
             engine = DnsClientEngine.normalize(connectionProfile.engine),
             cottenSettings = connectionProfile.cottenSettings,
+                soarSettings = connectionProfile.soarSettings,
         )
     }
 

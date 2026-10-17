@@ -14,22 +14,27 @@ Official channel: [https://t.me/whitedns](https://t.me/whitedns)
 
 ## Credits
 
-WhiteDNS is backed by the [MasterDNS Client](https://github.com/masterking32/MasterDnsVPN) project and supports both [StormDNS](https://github.com/nullroute1970/StormDNS) and [CottenDns](https://github.com/WhiteDNS/CottenDns) client engines.
+WhiteDNS is backed by the [MasterDNS Client](https://github.com/masterking32/MasterDnsVPN) project and supports [StormDNS](https://github.com/nullroute1970/StormDNS) and [CottenDns](https://github.com/WhiteDNS/CottenDns) client engines, plus [Lantern Soar](https://github.com/getlantern/soar).
 
 The Android VPN path also packages `tun2proxy`; see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for third-party license details.
 
 ## Features
 
-- Android client for WhiteDNS DNS tunneling with StormDNS and CottenDns engines.
+- Android client for WhiteDNS DNS tunneling with StormDNS, CottenDns and Soar engines.
 - Proxy mode with local SOCKS5 support and optional HTTP proxy bridge.
 - VPN mode using Android `VpnService` and packaged `tun2proxy` native libraries.
 - Built-in and custom server profile support.
-- `stormdns://` profile import and export helpers.
+- `stormdns://` and `soar://` profile import/export; tap a connection card to select it.
 - Resolver profile management with validation and default resolver assets.
 - Split tunnel options for VPN routing.
 - Runtime connection logs, resolver state, progress, and traffic statistics.
 - Foreground service notifications for long-running proxy and VPN sessions.
 - Jetpack Compose UI with Material 3 components.
+
+## Soar server and Iran profiles
+
+See [docs/SOAR.md](docs/SOAR.md) for IR/GLOBAL discovery, Conservative settings,
+network limits and the [guided server installer](https://github.com/WhiteDNS/Soar-Server).
 
 ## Project Structure
 
@@ -69,7 +74,7 @@ Requirements:
 
 - Android Studio or Android SDK command line tools.
 - JDK 17.
-- Go matching the version in `third_party/StormDNS/go.mod` and `third_party/CottenDns/go.mod`.
+- Go 1.26.1 for the pinned native client modules.
 - Android SDK platform for `compileSdk = 36`.
 - Android NDK `26.3.11579264`.
 - Android NDK `29.0.14206865` for rebuilding the StormDNS and CottenDns native clients.

@@ -12,7 +12,11 @@ class StormDnsBinaryInstaller(
         val normalizedEngine = DnsClientEngine.normalize(engine)
         val executable = File(
             context.applicationInfo.nativeLibraryDir,
-            if (normalizedEngine == DnsClientEngine.CottenDns) CottenDnsNativeLibraryName else StormDnsNativeLibraryName,
+            when (normalizedEngine) {
+                DnsClientEngine.Soar -> "libsoar_client.so"
+                DnsClientEngine.CottenDns -> CottenDnsNativeLibraryName
+                else -> StormDnsNativeLibraryName
+            },
         )
         val engineName = DnsClientEngine.displayName(normalizedEngine)
         if (!executable.exists()) {

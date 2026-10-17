@@ -13,6 +13,7 @@ import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
 import shop.whitedns.client.model.syncSelectedConnectionProfileFields
 import shop.whitedns.client.model.toJson
+import shop.whitedns.client.model.soarProfileSettingsFromJson
 
 data class RuntimeLaunchRequest(
     val id: String,
@@ -69,14 +70,14 @@ object RuntimeLaunchRequestStore {
         return File(launchDirectory(context), "$requestId$Extension")
     }
 
-    private fun encode(request: RuntimeLaunchRequest): JSONObject {
+    internal fun encode(request: RuntimeLaunchRequest): JSONObject {
         return JSONObject()
             .put("id", request.id)
             .put("serverProfile", encodeServerProfile(request.serverProfile))
             .put("settings", encodeSettings(request.settings))
     }
 
-    private fun decode(json: JSONObject): RuntimeLaunchRequest {
+    internal fun decode(json: JSONObject): RuntimeLaunchRequest {
         return RuntimeLaunchRequest(
             id = json.optString("id"),
             serverProfile = decodeServerProfile(json.getJSONObject("serverProfile")),
@@ -93,6 +94,7 @@ object RuntimeLaunchRequestStore {
             .put("encryptionMethod", profile.encryptionMethod)
             .put("engine", DnsClientEngine.normalize(profile.engine))
             .put("cottenSettings", profile.cottenSettings.toJson())
+            .put("soarSettings", profile.soarSettings.toJson())
     }
 
     private fun decodeServerProfile(json: JSONObject): StormDnsServerProfile {
@@ -108,6 +110,7 @@ object RuntimeLaunchRequestStore {
             cottenSettings = cottenDnsProfileSettingsFromJson(
                 json.optJSONObject("cottenSettings"),
             ),
+            soarSettings = soarProfileSettingsFromJson(json.optJSONObject("soarSettings")),
         )
     }
 
@@ -122,6 +125,7 @@ object RuntimeLaunchRequestStore {
             .put("selectedConnectionProfileId", settings.selectedConnectionProfileId)
             .put("engine", engine)
             .put("cottenSettings", selectedProfile.cottenSettings.toJson())
+            .put("soarSettings", selectedProfile.soarSettings.toJson())
             .put("serverMode", settings.serverMode)
             .put("customServerDomain", settings.customServerDomain)
             .put("customServerEncryptionKey", settings.customServerEncryptionKey)
@@ -205,6 +209,7 @@ object RuntimeLaunchRequestStore {
                     cottenSettings = cottenDnsProfileSettingsFromJson(
                         json.optJSONObject("cottenSettings"),
                     ),
+                    soarSettings = soarProfileSettingsFromJson(json.optJSONObject("soarSettings")),
                 ),
             ),
             serverMode = json.optString("serverMode", "custom"),

@@ -160,7 +160,7 @@ class WhiteDnsScanService : Service() {
         val workerInputs = partitionResolverFileRoundRobin(
             resolverFile = resolverFile,
             scanRoot = scanRoot,
-            requestedWorkerCount = requestedWorkerCount,
+            requestedWorkerCount = if (engine == DnsClientEngine.Soar) 1 else requestedWorkerCount,
         )
         val workerStats = Array(workerInputs.size) { WorkerScanStats(total = workerInputs[it].resolverCount) }
         val workerFailures = mutableListOf<String>()

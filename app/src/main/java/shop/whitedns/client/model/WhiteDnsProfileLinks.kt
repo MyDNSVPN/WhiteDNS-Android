@@ -1,6 +1,7 @@
 package shop.whitedns.client.model
 
 import java.util.Base64
+import org.json.JSONArray
 import org.json.JSONObject
 
 private const val StormDnsProfileScheme = "stormdns"
@@ -36,6 +37,21 @@ fun WhiteDnsSettings.exportStormDnsProfileLink(profile: ConnectionProfile = sele
         .put("version", StormDnsProfileVersion)
         .put("profile", profileJson)
 
+    if (normalizedProfile.engine == DnsClientEngine.Soar) {
+        require(isValidSoarServer(normalizedProfile.customServerDomain, normalizedProfile.customServerEncryptionKey)) { "Invalid Soar domain or server public key" }
+        profileJson.getJSONObject("server").remove("encryption_key")
+        profileJson.getJSONObject("server").remove("encryption_method")
+        profileJson.getJSONObject("server").put("public_key", normalizedProfile.customServerEncryptionKey)
+        profileJson.put("soarSettings", normalizedProfile.soarSettings.toJson())
+        val resolverText = normalizedResolverProfiles().firstOrNull {
+            it.id == normalizedProfile.resolverProfileId
+        }?.resolverText ?: if (normalizedProfile.id == selectedConnectionProfile().id) this.resolverText else ""
+        val entries = validateResolverText(resolverText)
+        if (entries.invalidEntries.isEmpty() && entries.normalizedResolvers.size in 1..8192 &&
+            entries.normalizedResolvers.none { '/' in it }) {
+            profileJson.put("resolvers", JSONArray(entries.normalizedResolvers))
+        }
+    }
     return "${DnsClientEngine.normalize(normalizedProfile.engine)}://${encodeProfilePayload(root)}"
 }
 
@@ -102,7 +118,7 @@ fun WhiteDnsSettings.importStormDnsProfileLink(
     val serverJson = profileJson.optJSONObject("server")
         ?: throw IllegalArgumentException("Missing server")
     val domain = serverJson.requiredString("domain").trim().trimEnd('.')
-    val encryptionKey = serverJson.requiredString("encryption_key").trim()
+    val encryptionKey = serverJson.requiredString(if (engine == DnsClientEngine.Soar) "public_key" else "encryption_key").trim()
     if (domain.isBlank()) {
         throw IllegalArgumentException("Server domain is required")
     }
@@ -112,7 +128,22 @@ fun WhiteDnsSettings.importStormDnsProfileLink(
 
     val profileName = profileJson.requiredString("name").trim()
     val profileId = uniqueImportedProfileId(normalizedConnectionProfiles(), nowMillis)
-    val encryptionMethod = serverJson.requiredInt("encryption_method")
+    val importedResolvers = if (engine == DnsClientEngine.Soar) {
+        val array = if (profileJson.has("resolvers")) {
+            profileJson.optJSONArray("resolvers") ?: throw IllegalArgumentException("Soar resolvers must be an array")
+        } else JSONArray(listOf("1.1.1.1"))
+        require(array.length() in 1..8192) { "Soar needs 1 to 8192 resolver addresses" }
+        val raw = (0 until array.length()).map {
+            array.opt(it) as? String ?: throw IllegalArgumentException("Soar resolver must be an IP address")
+        }
+        val validated = validateResolverText(raw.joinToString("\n"))
+        require(validated.invalidEntries.isEmpty() && validated.normalizedResolvers.size in 1..8192 && raw.none { '/' in it }) {
+            "Soar resolvers must be IP addresses or IP:port values, without address ranges"
+        }
+        ResolverProfile(id = "$profileId-resolvers", name = "$profileName DNS", resolverText = validated.normalizedText)
+    } else null
+    if (engine == DnsClientEngine.Soar) require(isValidSoarServer(domain, encryptionKey)) { "Invalid Soar domain or server public key" }
+    val encryptionMethod = if (engine == DnsClientEngine.Soar) 0 else serverJson.requiredInt("encryption_method")
     if (encryptionMethod !in 0..5) {
         throw IllegalArgumentException("Server encryption method must be between 0 and 5")
     }
@@ -123,14 +154,16 @@ fun WhiteDnsSettings.importStormDnsProfileLink(
         customServerDomain = domain,
         customServerEncryptionKey = encryptionKey,
         customServerEncryptionMethod = encryptionMethod,
-        resolverProfileId = "",
+        resolverProfileId = importedResolvers?.id.orEmpty(),
         connectionMode = connectionMode,
         engine = engine,
+        soarSettings = soarProfileSettingsFromJson(profileJson.optJSONObject("soarSettings")),
     )
 
     return copy(
         selectedConnectionProfileId = profileId,
         connectionProfiles = normalizedConnectionProfiles() + importedProfile,
+        resolverProfiles = normalizedResolverProfiles() + listOfNotNull(importedResolvers),
         serverMode = "custom",
         customServerDomain = domain,
         customServerEncryptionKey = encryptionKey,
@@ -150,8 +183,9 @@ private fun decodeProfilePayload(rawLink: String): Pair<JSONObject, String> {
     val engine = when (link.take(schemeEnd.coerceAtLeast(0)).lowercase()) {
         MasterDnsProfileScheme, StormDnsProfileScheme -> DnsClientEngine.StormDns
         CottenDnsProfileScheme -> DnsClientEngine.CottenDns
+        "soar" -> DnsClientEngine.Soar
         else -> throw IllegalArgumentException(
-            "Profile link must start with masterdns://, stormdns://, or cottendns://",
+            "Profile link must start with masterdns://, stormdns://, cottendns://, or soar://",
         )
     }
     val payload = link.substring(schemeEnd + 3).trim()

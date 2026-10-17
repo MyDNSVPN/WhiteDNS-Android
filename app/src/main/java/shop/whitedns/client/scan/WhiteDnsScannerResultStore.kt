@@ -14,7 +14,7 @@ object WhiteDnsScannerResultStore {
     private val ResultFileLock = Any()
 
     /** Engines write only to their own store; reads span all of them. */
-    private val AllEngines = listOf(DnsClientEngine.StormDns, DnsClientEngine.CottenDns)
+    private val AllEngines = listOf(DnsClientEngine.StormDns, DnsClientEngine.CottenDns, DnsClientEngine.Soar)
 
     /** The store this engine owns. Only this engine ever writes here. */
     fun resultFile(context: Context, engine: String): File {
@@ -36,9 +36,10 @@ object WhiteDnsScannerResultStore {
     }
 
     fun readValidResolverSet(context: Context, engine: String): Set<String> {
+        if (DnsClientEngine.normalize(engine) == DnsClientEngine.Soar) return readEngineStore(context, DnsClientEngine.Soar)
         val ordered = LinkedHashSet<String>()
         ordered += readEngineStore(context, engine)
-        AllEngines.filterNot { DnsClientEngine.normalize(it) == DnsClientEngine.normalize(engine) }
+        AllEngines.filterNot { it == DnsClientEngine.Soar || DnsClientEngine.normalize(it) == DnsClientEngine.normalize(engine) }
             .forEach { other -> ordered += readEngineStore(context, other) }
         return ordered
     }
@@ -121,7 +122,7 @@ object WhiteDnsScannerResultStore {
                     return@forEach
                 }
                 if (candidateCount > 0) {
-                    writer.newLine()
+                    writer.write("\n")
                 }
                 writer.write(line)
                 candidateCount += 1
@@ -159,7 +160,7 @@ object WhiteDnsScannerResultStore {
                         alreadyValidResolverCount += 1
                     } else {
                         if (pendingResolverCount > 0) {
-                            writer.newLine()
+                            writer.write("\n")
                         }
                         writer.write(resolver)
                         pendingResolverCount += 1

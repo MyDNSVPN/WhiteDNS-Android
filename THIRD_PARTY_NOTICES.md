@@ -125,3 +125,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Experimental Soar engine
+
+Soar v0.2.2 (Apache-2.0), golang.org/x/crypto v0.52.0 and golang.org/x/sys v0.45.0 (BSD), and Go runtime (BSD).
+Full license texts and the KevinNet DNS data notice are packaged in `app/src/main/assets/soar-third-party-notices.txt`.
+The engine uses the upstream Soar protocol without modifying its wire format.

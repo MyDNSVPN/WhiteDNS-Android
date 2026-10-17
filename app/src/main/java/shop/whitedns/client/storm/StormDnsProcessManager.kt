@@ -1,6 +1,7 @@
 package shop.whitedns.client.storm
 
 import android.content.Context
+import android.net.ConnectivityManager
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -42,7 +43,11 @@ class StormDnsProcessManager(
         val resolversFile = File(runtimeDir, ".wd-$launchId.resolvers")
 
         configFile.writeText(
-            StormDnsConfigRenderer.renderClientToml(
+            if (engine == DnsClientEngine.Soar) SoarConfigRenderer.render(
+                profile = serverProfile,
+                settings = settings,
+                systemResolvers = currentNetworkResolvers(),
+            ) else StormDnsConfigRenderer.renderClientToml(
                 serverProfile = serverProfile,
                 settings = settings,
             ),
@@ -56,6 +61,14 @@ class StormDnsProcessManager(
             resolversFile = resolversFile,
         )
     }
+
+    private fun currentNetworkResolvers(): List<String> = runCatching {
+        val connectivity = context.getSystemService(ConnectivityManager::class.java)
+        val network = connectivity.activeNetwork ?: return@runCatching emptyList<String>()
+        connectivity.getLinkProperties(network)?.dnsServers.orEmpty()
+            .mapNotNull { it.hostAddress }
+            .distinct().take(8)
+    }.getOrDefault(emptyList())
 
     fun start(
         serverProfile: StormDnsServerProfile,

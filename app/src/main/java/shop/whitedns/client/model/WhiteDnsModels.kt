@@ -18,16 +18,18 @@ data class Choice<T>(
 object DnsClientEngine {
     const val StormDns = "stormdns"
     const val CottenDns = "cottendns"
+    const val Soar = "soar"
 
     fun normalize(value: String): String {
         return when (value.trim().lowercase()) {
             "cotten", "cotton", "cottendns", "cottondns" -> CottenDns
+            "soar" -> Soar
             else -> StormDns
         }
     }
 
     fun displayName(value: String): String {
-        return if (normalize(value) == CottenDns) "CottenDNS" else "StormDNS"
+        return when (normalize(value)) { CottenDns -> "CottenDNS"; Soar -> "Soar"; else -> "StormDNS" }
     }
 }
 
@@ -227,6 +229,7 @@ data class StormDnsServerProfile(
     val encryptionMethod: Int,
     val engine: String = DnsClientEngine.StormDns,
     val cottenSettings: CottenDnsProfileSettings = CottenDnsProfileSettings(),
+    val soarSettings: SoarProfileSettings = SoarProfileSettings(),
 )
 
 data class ConnectionProfile(
@@ -240,6 +243,7 @@ data class ConnectionProfile(
     val connectionMode: String = "proxy",
     val engine: String = DnsClientEngine.StormDns,
     val cottenSettings: CottenDnsProfileSettings = CottenDnsProfileSettings(),
+    val soarSettings: SoarProfileSettings = SoarProfileSettings(),
 ) : Serializable {
     companion object {
         const val DefaultId = "default"
@@ -870,6 +874,7 @@ fun WhiteDnsSettings.normalizedConnectionProfiles(): List<ConnectionProfile> {
                 },
                 engine = DnsClientEngine.normalize(profile.engine),
                 cottenSettings = profile.cottenSettings.normalized(),
+                soarSettings = profile.soarSettings.normalized(),
             )
         }
 
@@ -980,7 +985,10 @@ fun WhiteDnsSettings.syncSelectedConnectionProfileFields(): WhiteDnsSettings {
 }
 
 fun WhiteDnsSettings.runtimeConnectionSettings(): WhiteDnsSettings {
-    val settings = syncSelectedConnectionProfileFields()
+    val isSoar = selectedConnectionProfile().engine == DnsClientEngine.Soar
+    val settings = syncSelectedConnectionProfileFields().let {
+        if (isSoar) it.copy(protocolType = "SOCKS5", listenIp = "127.0.0.1", localDnsEnabled = false) else it
+    }
     return if (settings.connectionMode == "vpn") {
         settings.copy(
             listenIp = WhiteDnsRuntimeProxy.ListenIp,
@@ -995,7 +1003,7 @@ fun WhiteDnsSettings.runtimeConnectionSettings(): WhiteDnsSettings {
         )
     } else {
         settings.copy(
-            localDnsEnabled = true,
+            localDnsEnabled = !isSoar,
             localDnsPort = WhiteDnsRuntimeProxy.LocalDnsPort,
         )
     }
@@ -1151,6 +1159,7 @@ fun WhiteDnsSettings.upsertConnectionProfile(profile: ConnectionProfile): WhiteD
         },
         engine = DnsClientEngine.normalize(profile.engine),
         cottenSettings = profile.cottenSettings.normalized(),
+                soarSettings = profile.soarSettings.normalized(),
     )
     val profiles = normalizedConnectionProfiles()
     val updatedProfiles = if (profiles.any { it.id == normalizedProfile.id }) {

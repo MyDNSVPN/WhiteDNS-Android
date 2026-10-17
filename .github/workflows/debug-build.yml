@@ -56,10 +56,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: third_party/StormDNS/go.mod
+          go-version: '1.26.1'
           cache-dependency-path: |
             third_party/StormDNS/go.sum
             third_party/CottenDns/go.sum
+            soar-engine/go.sum
 
       - name: Report pinned engine commits
         run: |
@@ -70,18 +71,28 @@ jobs:
       - name: Build DNS native clients
         run: |
           set -euo pipefail
-          make stormdns cottendns \
+          make stormdns cottendns soar \
             NDK_HOST=linux-x86_64 \
             NDK_ROOT="${ANDROID_HOME}/ndk/${STORMDNS_ANDROID_NDK_VERSION}"
 
       - name: Verify native core versions
         run: python3 scripts/verify-cottendns-apks.py --native-only
 
+      - name: Test Soar engine
+        working-directory: soar-engine
+        run: |
+          go mod verify
+          go test ./... -count=1 -timeout 90s
+          go vet ./...
+
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest
 
       - name: Build debug APKs
         run: ./gradlew :app:assembleDebug
+
+      - name: Verify packaged Soar cores
+        run: python3 scripts/verify-soar-apks.py app/build/outputs/apk/debug
 
       - name: Verify packaged CottenDNS cores
         run: python3 scripts/verify-cottendns-apks.py app/build/outputs/apk/debug

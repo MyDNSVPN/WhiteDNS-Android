@@ -57,20 +57,28 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: third_party/StormDNS/go.mod
+          go-version: '1.26.1'
           cache-dependency-path: |
             third_party/StormDNS/go.sum
             third_party/CottenDns/go.sum
+            soar-engine/go.sum
 
       - name: Build DNS native clients
         run: |
           set -euo pipefail
-          make stormdns cottendns \
+          make stormdns cottendns soar \
             NDK_HOST=linux-x86_64 \
             NDK_ROOT="${ANDROID_HOME}/ndk/${STORMDNS_ANDROID_NDK_VERSION}"
 
       - name: Verify native core versions
         run: python3 scripts/verify-cottendns-apks.py --native-only
+
+      - name: Test Soar engine
+        working-directory: soar-engine
+        run: |
+          go mod verify
+          go test ./... -count=1 -timeout 90s
+          go vet ./...
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
@@ -138,6 +146,9 @@ jobs:
           cp THIRD_PARTY_NOTICES.md "dist/WhiteDNS-${TAG_NAME}-THIRD_PARTY_NOTICES.md"
           (cd dist && shasum -a 256 * > SHA256SUMS.txt)
 
+      - name: Verify packaged Soar cores
+        run: python3 scripts/verify-soar-apks.py dist
+
       - name: Verify packaged CottenDNS cores
         run: python3 scripts/verify-cottendns-apks.py dist
 
@@ -150,13 +161,11 @@ jobs:
           RELEASE_TITLE="WhiteDNS ${TAG_NAME}"
           NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
 
-          cat > "${NOTES_FILE}" <<EOF
-          Official WhiteDNS release for ${TAG_NAME}.
-
-          WhiteDNS is not published on Google Play. APKs attached to this GitHub release are the official release artifacts for this tag.
-
-          See LICENSE.MD, CONTRIBUTING.md, CLA.md, and TRADEMARK.MD before using or contributing to this project.
-          EOF
+          if [[ -f "RELEASE-NOTES-${TAG_NAME#v}.md" ]]; then
+            cp "RELEASE-NOTES-${TAG_NAME#v}.md" "${NOTES_FILE}"
+          else
+            printf 'Official WhiteDNS release %s. See README and THIRD_PARTY_NOTICES.md.\n' "$TAG_NAME" > "$NOTES_FILE"
+          fi
 
           release_flags=()
           if [[ "${TAG_NAME}" =~ (alpha|beta|rc) ]]; then

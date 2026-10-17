@@ -1,1 +1,2 @@
 *.sh text eol=lf
+soar-engine/data/resolvers/*.txt text eol=lf

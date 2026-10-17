@@ -5,19 +5,20 @@ plugins {
 
 val whiteDnsVersionCode = providers.gradleProperty("WHITE_DNS_VERSION_CODE")
     .map { it.toInt() }
-    .orElse(19)
+    .orElse(26)
 val whiteDnsVersionName = providers.gradleProperty("WHITE_DNS_VERSION_NAME")
-    .orElse("1.6.5")
+    .orElse("1.6.6")
 
 android {
     namespace = "shop.whitedns.client"
     compileSdk = 36
-    ndkVersion = "26.3.11579264"
+    ndkVersion = providers.gradleProperty("WHITE_DNS_NDK_VERSION").orElse("26.3.11579264").get()
 
     defaultConfig {
         applicationId = "shop.whitedns.client"
         minSdk = 26
         targetSdk = 34
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = whiteDnsVersionCode.get()
         versionName = whiteDnsVersionName.get()
 
@@ -63,6 +64,7 @@ android {
         jniLibs {
             // Go clients are already stripped; retain their verified executable bytes.
             keepDebugSymbols += "**/libcottendns_client.so"
+            keepDebugSymbols += "**/libsoar_client.so"
             useLegacyPackaging = true
         }
         resources {

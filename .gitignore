@@ -17,6 +17,7 @@ captures/
 id_ed25519*
 id_rsa*
 nemigam*
+/app/src/main/jniLibs/**/libsoar_client.so
 
 /storm-dns/
 /StormDNS/

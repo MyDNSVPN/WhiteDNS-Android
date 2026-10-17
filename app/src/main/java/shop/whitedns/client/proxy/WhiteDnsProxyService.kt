@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import shop.whitedns.client.MainActivity
 import shop.whitedns.client.R
 import shop.whitedns.client.model.DnsClientEngine
+import shop.whitedns.client.model.canDiscoverSoarResolvers
 import shop.whitedns.client.model.ResolvedWhiteDnsSettings
 import shop.whitedns.client.model.ServerDomains
 import shop.whitedns.client.model.StormDnsServerProfile
@@ -139,7 +140,7 @@ class WhiteDnsProxyService : Service() {
                     if (resolvedSettings.connectionMode != "proxy") {
                         throw IllegalStateException("Proxy mode is not enabled")
                     }
-                    if (resolvedSettings.resolverEntries.isEmpty()) {
+                    if (resolvedSettings.resolverEntries.isEmpty() && !settings.canDiscoverSoarResolvers()) {
                         throw IllegalStateException("Resolvers are required to connect")
                     }
                     val serverProfile = launchRequest.serverProfile
@@ -304,6 +305,7 @@ class WhiteDnsProxyService : Service() {
     private fun detectStormDnsStartupFailure(line: String): String? {
         val normalized = line.lowercase()
         return when {
+            line.startsWith("SOAR_ERROR:") -> line.removePrefix("SOAR_ERROR:").trim()
             "no valid connections found after mtu testing" in normalized ||
                 "mtu tests failed: no valid connections" in normalized ||
                 "no valid connections after mtu testing" in normalized ->
@@ -560,6 +562,7 @@ class WhiteDnsProxyService : Service() {
                 encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
                 engine = connectionProfile.engine,
                 cottenSettings = connectionProfile.cottenSettings,
+                soarSettings = connectionProfile.soarSettings,
             )
         }
 

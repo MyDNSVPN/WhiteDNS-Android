@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import java.util.UUID
 import shop.whitedns.client.MainActivity
 import shop.whitedns.client.model.DnsClientEngine
+import shop.whitedns.client.model.canDiscoverSoarResolvers
 import shop.whitedns.client.model.ServerDomains
 import shop.whitedns.client.model.StormDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsSettings
@@ -47,7 +48,7 @@ class WhiteDnsTileService : TileService() {
         val settings = settingsStore.load().runtimeConnectionSettings()
         val resolvedSettings = settings.resolve()
         val serverProfile = selectServerProfile(settings)
-        if (resolvedSettings.resolverEntries.isEmpty() || serverProfile == null) {
+        if ((resolvedSettings.resolverEntries.isEmpty() && !settings.canDiscoverSoarResolvers()) || serverProfile == null) {
             updateTile(subtitle = "Needs setup", state = Tile.STATE_UNAVAILABLE)
             openApp()
             return
@@ -152,6 +153,7 @@ class WhiteDnsTileService : TileService() {
             encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
             engine = connectionProfile.engine,
             cottenSettings = connectionProfile.cottenSettings,
+                soarSettings = connectionProfile.soarSettings,
         )
     }
 }

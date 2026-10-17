@@ -147,6 +147,8 @@ import shop.whitedns.client.model.ConnectionStatus
 import shop.whitedns.client.model.ConnectionVerificationState
 import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.CottenDnsProfileSettings
+import shop.whitedns.client.model.SoarProfileSettings
+import shop.whitedns.client.model.isValidSoarServer
 import shop.whitedns.client.model.DnsClientEngine
 import shop.whitedns.client.model.ResolverProfile
 import shop.whitedns.client.model.ResolverRuntimeState
@@ -452,7 +454,8 @@ private fun ConnectTabContent(
     } else {
         notSelectedStr
     }
-    val hasResolvers = resolverValidation.isValid
+    val hasResolvers = resolverValidation.isValid ||
+        (selectedConnectionProfile.engine == DnsClientEngine.Soar && selectedConnectionProfile.soarSettings.discovery && settings.resolverText.isBlank())
     val proxyIpAddress = displayProxyIpAddress(
         listenIp = resolvedSettings.listenIp,
         networkIpAddress = uiState.networkIpAddress,
@@ -821,6 +824,7 @@ private fun ConnectTabContent(
                         splitTunnelMode = resolvedSettings.splitTunnelMode,
                         splitTunnelPackages = resolvedSettings.splitTunnelPackages,
                         splitTunnelAppLabels = splitTunnelAppLabels,
+                        isSoar = selectedConnectionProfile.engine == DnsClientEngine.Soar,
                         canDownloadToml = selectedConnectionProfile.customServerDomain.isNotBlank() &&
                             selectedConnectionProfile.customServerEncryptionKey.isNotBlank(),
                         onDownloadToml = {
@@ -881,9 +885,9 @@ private fun ConnectTabContent(
 
         if (showConnectionTomlDialog) {
             ConnectionProfileExportDialog(
-                title = WhiteDnsL10n.downloadTomlTitle,
-                fieldLabel = "client_config.toml",
-                placeholder = "client_config.toml",
+                title = if (selectedConnectionProfile.engine == DnsClientEngine.Soar) soarText("EXPORT SOAR SETTINGS", "خروجی تنظیمات Soar") else WhiteDnsL10n.downloadTomlTitle,
+                fieldLabel = if (selectedConnectionProfile.engine == DnsClientEngine.Soar) "soar_config.json" else "client_config.toml",
+                placeholder = if (selectedConnectionProfile.engine == DnsClientEngine.Soar) "soar_config.json" else "client_config.toml",
                 showQr = false,
                 linkResult = remember(settings, selectedConnectionProfile, showConnectionTomlDialog) {
                     runCatching {
@@ -895,7 +899,9 @@ private fun ConnectTabContent(
                 },
                 onDismiss = { showConnectionTomlDialog = false },
                 onShare = { toml ->
-                    shareClientConfigToml(context, toml, shareChooserClientConfigLabel)
+                    if (selectedConnectionProfile.engine == DnsClientEngine.Soar) {
+                        shareTextExport(context, "soar_config.json", "Soar configuration", "Export Soar configuration", toml)
+                    } else shareClientConfigToml(context, toml, shareChooserClientConfigLabel)
                 },
             )
         }
@@ -3434,7 +3440,7 @@ private fun ProfileTopActionGrid(actions: List<ProfileTopAction>) {
 }
 
 @Composable
-private fun ConnectionProfilesSettings(
+internal fun ConnectionProfilesSettings(
     settings: WhiteDnsSettings,
     activeConnectionProfileId: String?,
     connectionStatus: ConnectionStatus,
@@ -3675,6 +3681,7 @@ private fun ConnectionProfilesSettings(
                 profile = profile,
                 selected = profile.id == selectedProfile.id,
                 active = isActive,
+                canUse = canManageProfiles && !isDragging,
                 canEdit = canEdit,
                 canDelete = canDelete,
                 canTest = canTest,
@@ -3682,6 +3689,9 @@ private fun ConnectionProfilesSettings(
                 dragging = isDragging,
                 serverTestResult = serverTestResult,
                 serverTestScore = serverTestResult?.let { serverTestScores[it.serverId] },
+                onUse = {
+                    onSettingsChange(settings.selectConnectionProfile(profile.id))
+                },
                 onDragStart = {
                     if (canManageProfiles && customProfiles.size > 1) {
                         draggedProfileId = profile.id
@@ -4819,7 +4829,7 @@ private fun ConnectionProfileImportDialog(
                     profileLinks = it
                     importError = null
                 },
-                placeholder = "stormdns://...\ncottendns://...",
+                placeholder = "stormdns://...\ncottendns://...\nsoar://...",
                 singleLine = false,
                 minLines = 5,
                 maxLines = 9,
@@ -5247,8 +5257,11 @@ private fun ConnectionProfileDialog(
     var cotten by remember(profile?.id) {
         mutableStateOf(profile?.cottenSettings?.normalized() ?: CottenDnsProfileSettings())
     }
+    var soar by remember(profile?.id) { mutableStateOf(profile?.soarSettings?.normalized() ?: SoarProfileSettings()) }
     val effectiveEngine = DnsClientEngine.normalize(engine)
-    val canSave = name.isNotBlank() && ServerDomains.isValid(domain) && encryptionKey.isNotBlank()
+    val canSave = name.isNotBlank() && if (effectiveEngine == DnsClientEngine.Soar) {
+        isValidSoarServer(domain, encryptionKey)
+    } else ServerDomains.isValid(domain) && encryptionKey.isNotBlank()
 
     // Bound the dialog to the viewport rather than a fixed height: a tall phone,
     // a tablet, landscape and large font scaling all give very different room,
@@ -5301,7 +5314,7 @@ private fun ConnectionProfileDialog(
                     placeholder = WhiteDnsL10n.profileMyStormDnsPlaceholder,
                 )
                 WhiteDnsTextField(
-                    label = WhiteDnsL10n.profileFieldDomain,
+                    label = if (effectiveEngine == DnsClientEngine.Soar) soarText("Tunnel domain (one zone)", "دامنهٔ تونل (یک زیردامنه)") else WhiteDnsL10n.profileFieldDomain,
                     // Not trimmed on input: a comma-separated list needs the space
                     // after each comma to survive while it is being typed.
                     value = domain,
@@ -5309,17 +5322,27 @@ private fun ConnectionProfileDialog(
                     placeholder = WhiteDnsL10n.profileDomainPlaceholder,
                 )
                 WhiteDnsTextField(
-                    label = WhiteDnsL10n.profileFieldEncryptionKey,
+                    label = if (effectiveEngine == DnsClientEngine.Soar) soarText("Server PUBLIC key", "کلید عمومی سرور") else WhiteDnsL10n.profileFieldEncryptionKey,
                     value = encryptionKey,
                     onValueChange = { encryptionKey = it.trim() },
-                    placeholder = WhiteDnsL10n.profileEncryptionKeyPlaceholder,
+                    placeholder = if (effectiveEngine == DnsClientEngine.Soar) "Base64 Ed25519 public key" else WhiteDnsL10n.profileEncryptionKeyPlaceholder,
+                    rawValue = effectiveEngine == DnsClientEngine.Soar,
                 )
-                WhiteDnsDropdownField(
-                    label = WhiteDnsL10n.profileFieldEncryptionMethod,
-                    value = encryptionMethod,
-                    options = localizedEncryptionMethods(),
-                    onValueChange = { encryptionMethod = it },
-                )
+                if (effectiveEngine != DnsClientEngine.Soar) {
+                    WhiteDnsDropdownField(
+                        label = WhiteDnsL10n.profileFieldEncryptionMethod,
+                        value = encryptionMethod,
+                        options = localizedEncryptionMethods(),
+                        onValueChange = { encryptionMethod = it },
+                    )
+                } else {
+                    SoarSettingsPanel(soar) { soar = it }
+                    if (!isValidSoarServer(domain, encryptionKey)) {
+                        Text(soarText("Enter one ASCII domain (up to 45 characters) and the server public key from soar-manager. Do not use the private key.",
+                            "یک دامنهٔ ASCII تا ۴۵ نویسه و کلید عمومی خروجی soar-manager را وارد کنید؛ کلید خصوصی را وارد نکنید."),
+                            style = MaterialTheme.typography.bodySmall, color = WhiteDnsPalette.Muted)
+                    }
+                }
                 if (effectiveEngine == DnsClientEngine.CottenDns) {
                     Text(
                         text = WhiteDnsL10n.profileCottenSectionTitle,
@@ -5470,6 +5493,7 @@ private fun ConnectionProfileDialog(
                                 connectionMode = profile?.connectionMode ?: "proxy",
                                 engine = engine,
                                 cottenSettings = cotten.normalized(),
+                                soarSettings = soar.normalized(),
                             ),
                         )
                     },
@@ -5514,6 +5538,7 @@ private fun ConnectionProfileRow(
     profile: ConnectionProfile,
     selected: Boolean,
     active: Boolean,
+    canUse: Boolean,
     canEdit: Boolean,
     canDelete: Boolean,
     canTest: Boolean,
@@ -5521,6 +5546,7 @@ private fun ConnectionProfileRow(
     dragging: Boolean,
     serverTestResult: ServerTestResult?,
     serverTestScore: ServerTestScore?,
+    onUse: () -> Unit,
     onDragStart: () -> Unit,
     onDrag: (Float) -> Unit,
     onDragEnd: () -> Unit,
@@ -5568,6 +5594,12 @@ private fun ConnectionProfileRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(11.dp))
             .background(rowSurface)
+            .selectable(
+                selected = selected,
+                enabled = canUse,
+                role = Role.RadioButton,
+                onClick = onUse,
+            )
             .border(
                 1.dp,
                 rowBorder,
@@ -5618,6 +5650,13 @@ private fun ConnectionProfileRow(
                 contentDescription = WhiteDnsL10n.connectionProfileMenuActions,
                 actions = listOf(
                     ProfileMenuAction(
+                        label = if (selected) WhiteDnsL10n.profileMenuUseSelected else WhiteDnsL10n.profileMenuUse,
+                        icon = Icons.Rounded.Check,
+                        contentDescription = WhiteDnsL10n.profileMenuUse,
+                        enabled = canUse,
+                        onClick = onUse,
+                    ),
+                    ProfileMenuAction(
                         label = WhiteDnsL10n.serverTestSingleButton,
                         icon = Icons.Rounded.Speed,
                         contentDescription = WhiteDnsL10n.serverTestSingleButton,
@@ -5632,7 +5671,7 @@ private fun ConnectionProfileRow(
                         onClick = onExport,
                     ),
                     ProfileMenuAction(
-                        label = if (selected) WhiteDnsL10n.profileMenuUseSelected else WhiteDnsL10n.profileMenuEdit,
+                        label = WhiteDnsL10n.profileMenuEdit,
                         icon = Icons.Rounded.Edit,
                         contentDescription = WhiteDnsL10n.editConnectionProfileAction,
                         enabled = canEdit,
@@ -8089,6 +8128,7 @@ private fun ConnectionInfoCard(
     splitTunnelAppLabels: Map<String, String>,
     canDownloadToml: Boolean,
     onDownloadToml: () -> Unit,
+    isSoar: Boolean = false,
 ) {
     InfoCard(title = WhiteDnsL10n.infoCardConnection) {
         InfoRow(label = WhiteDnsL10n.infoLabelMode, value = connectionMode)
@@ -8142,7 +8182,7 @@ private fun ConnectionInfoCard(
         Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
         ResolverActionButton(
             modifier = Modifier.fillMaxWidth(),
-            label = WhiteDnsL10n.downloadTomlBtn,
+            label = if (isSoar) soarText("EXPORT SETTINGS", "خروجی تنظیمات") else WhiteDnsL10n.downloadTomlBtn,
             emphasized = false,
             enabled = canDownloadToml,
             onClick = onDownloadToml,
@@ -9447,6 +9487,7 @@ private fun localizedSplitTunnelModes(): List<Choice<String>> = listOf(
 private fun localizedDnsClientEngines(): List<Choice<String>> = listOf(
     Choice(DnsClientEngine.StormDns, WhiteDnsL10n.profileEngineStormDns),
     Choice(DnsClientEngine.CottenDns, WhiteDnsL10n.profileEngineCottenDns),
+    Choice(DnsClientEngine.Soar, "Soar (experimental)"),
 )
 
 /**
@@ -9967,3 +10008,67 @@ private fun filterDecimalInput(value: String): String {
 private const val CacheExportDirectory = "exports"
 private const val CacheExportMaxAgeMillis = 60L * 60L * 1_000L
 private const val ResolverProfilesExportFileName = "client_resolvers.txt"
+
+@Composable
+private fun soarText(english: String, persian: String): String =
+    if (LocalWhiteDnsStrings.current === PersianStrings) persian else english
+
+@Composable
+private fun SoarSettingsPanel(value: SoarProfileSettings, onChange: (SoarProfileSettings) -> Unit) {
+    var advanced by remember { mutableStateOf(false) }
+    val presets = listOf("conservative", "balanced", "fast")
+    val preset = presets.firstOrNull {
+        value == SoarProfileSettings.preset(it).copy(discovery = value.discovery, country = value.country)
+    } ?: "custom"
+    Text(soarText("Soar: TCP web traffic over DNS. VPN mode does not add UDP/QUIC support. Default server ports: 80 and 443.",
+        "Soar ترافیک TCP وب را روی DNS منتقل می‌کند. حالت VPN پشتیبانی UDP/QUIC اضافه نمی‌کند. پورت‌های پیش‌فرض سرور: ۸۰ و ۴۴۳."),
+        style = MaterialTheme.typography.bodySmall, color = WhiteDnsPalette.Muted)
+    WhiteDnsDropdownField(label = soarText("Soar preset", "تنظیم آمادهٔ Soar"), value = preset,
+        options = listOf(Choice("balanced", soarText("Balanced (recommended)", "متعادل (پیشنهادی)")),
+            Choice("conservative", soarText("Conservative / restricted DNS", "محافظه‌کار / DNS محدود")),
+            Choice("fast", soarText("Fast / reliable DNS", "سریع / DNS پایدار")), Choice("custom", soarText("Custom", "سفارشی"))),
+        onValueChange = { if (it != "custom") onChange(SoarProfileSettings.preset(it).copy(discovery = value.discovery, country = value.country)) })
+    WhiteDnsDropdownField(label = soarText("DNS resolver transport", "مسیر اتصال به DNS resolver"), value = value.transport,
+        options = listOf(Choice("auto", soarText("Auto UDP with TCP fallback", "خودکار: UDP با جایگزین TCP")),
+            Choice("on", soarText("UDP and TCP together", "UDP و TCP هم‌زمان")), Choice("only", "TCP only"), Choice("off", "UDP only")),
+        onValueChange = { onChange(value.copy(transport = it)) })
+    WhiteDnsDropdownField(label = soarText("Discover additional resolvers", "کشف resolverهای بیشتر"), value = value.discovery,
+        options = listOf(Choice(true, soarText("Enabled", "فعال")), Choice(false, soarText("Disabled (configured list only)", "غیرفعال (فقط فهرست انتخابی)"))),
+        onValueChange = { onChange(value.copy(discovery = it)) })
+    if (value.discovery) {
+        WhiteDnsDropdownField(label = soarText("User network country", "کشور اینترنت کاربر"), value = value.country,
+            options = listOf(Choice("IR", soarText("Iran", "ایران")), Choice("", soarText("Global / other", "عمومی / سایر"))),
+            onValueChange = { onChange(value.copy(country = it)) })
+        Text(soarText("Uses authenticated discovery and bundled lists. Random range scanning is disabled. This is the phone network country, not the VPS location.",
+            "کشف با تأیید هویت سرور و فهرست‌های آماده انجام می‌شود؛ اسکن تصادفی بازه‌های IP خاموش است. کشور اینترنت گوشی را انتخاب کنید، نه محل VPS."),
+            style = MaterialTheme.typography.bodySmall, color = WhiteDnsPalette.Muted)
+    }
+    CompactActionButton(modifier = Modifier.fillMaxWidth(), label = if (advanced) soarText("Hide advanced settings", "بستن تنظیمات پیشرفته") else soarText("Advanced Soar settings", "تنظیمات پیشرفتهٔ Soar"),
+        emphasized = false, enabled = true, onClick = { advanced = !advanced })
+    if (advanced) {
+        SoarIntField(soarText("Queries in flight (total)", "پرس‌وجوی هم‌زمان (کل)"), value.maxInflight, listOf(8, 16, 32, 64, 128, 256, 512, 1024)) { onChange(value.copy(maxInflight = it)) }
+        SoarIntField(soarText("Window per resolver path", "پنجرهٔ هر مسیر resolver"), value.maxPathWindow, listOf(2, 4, 8, 16, 32, 64, 128)) { onChange(value.copy(maxPathWindow = it)) }
+        SoarIntField(soarText("Maximum DNS answer (bytes)", "حداکثر اندازهٔ پاسخ DNS (بایت)"), value.maxAnswer, listOf(512, 704, 896, 1232)) { onChange(value.copy(maxAnswer = it)) }
+        SoarIntField(soarText("Maximum query name length", "حداکثر طول نام پرس‌وجو"), value.maxQName, listOf(101, 128, 180, 253)) { onChange(value.copy(maxQName = it, safeQName = minOf(value.safeQName, it))) }
+        SoarIntField(soarText("Initial safe query name length", "طول اولیهٔ امن نام پرس‌وجو"), value.safeQName, listOf(101, 128, 180, 253).filter { it <= value.maxQName }) { onChange(value.copy(safeQName = it)) }
+        SoarIntField(soarText("Held poll budget (ms)", "مهلت نگه‌داشتن پرس‌وجو (میلی‌ثانیه)"), value.holdMs, listOf(100, 250, 500, 1000, 1500)) { onChange(value.copy(holdMs = it)) }
+        SoarIntField(soarText("Maximum TCP streams", "حداکثر اتصال‌های TCP"), value.maxStreams, listOf(8, 16, 32, 64, 128, 256)) { onChange(value.copy(maxStreams = it)) }
+        SoarIntField(soarText("Receive window per stream (KiB)", "پنجرهٔ دریافت هر اتصال (KiB)"), value.streamWindowKiB, listOf(64, 128, 256, 512, 1024)) { onChange(value.copy(streamWindowKiB = it)) }
+        SoarIntField(soarText("Send buffer per stream (KiB)", "بافر ارسال هر اتصال (KiB)"), value.sendBufferKiB, listOf(32, 64, 128, 256, 512, 1024)) { onChange(value.copy(sendBufferKiB = it)) }
+        SoarIntField(soarText("Retire idle session after (seconds)", "بازنشانی نشست بیکار پس از (ثانیه)"), value.sessionIdleSeconds, listOf(15, 30, 60, 90, 110)) { onChange(value.copy(sessionIdleSeconds = it)) }
+        SoarIntField(soarText("Connection / startup timeout (seconds)", "مهلت اتصال و راه‌اندازی (ثانیه)"), value.dialTimeoutSeconds, listOf(15, 30, 45, 60, 90, 120)) { onChange(value.copy(dialTimeoutSeconds = it)) }
+        if (value.discovery) {
+            SoarIntField(soarText("Desired healthy resolver paths", "تعداد مسیر سالم موردنظر"), value.discoveryWant, listOf(1, 2, 4, 8, 16, 32)) { onChange(value.copy(discoveryWant = it)) }
+            SoarIntField(soarText("Discovery concurrency (scan capped at 8)", "هم‌زمانی کشف (اسکن حداکثر ۸)"), value.discoveryConcurrency, listOf(1, 2, 4, 8, 16)) { onChange(value.copy(discoveryConcurrency = it)) }
+            SoarIntField(soarText("Discovery spacing (ms)", "فاصلهٔ تلاش‌های کشف (میلی‌ثانیه)"), value.discoveryPaceMs, listOf(100, 250, 500, 1000, 2000, 5000)) { onChange(value.copy(discoveryPaceMs = it)) }
+        }
+        Text(soarText("Higher values can increase memory and DNS traffic. Start with Balanced; use Conservative when resolvers drop long names or large answers. Master/Cotten encryption, duplication, compression and MTU controls do not apply to Soar.",
+            "مقادیر بیشتر می‌توانند مصرف حافظه و ترافیک DNS را بالا ببرند. از حالت متعادل شروع کنید؛ برای حذف نام‌های بلند یا پاسخ‌های بزرگ، حالت محافظه‌کار را امتحان کنید. تنظیمات رمزنگاری، تکرار، فشرده‌سازی و MTU موتورهای Master/Cotten روی Soar اعمال نمی‌شوند."),
+            style = MaterialTheme.typography.bodySmall, color = WhiteDnsPalette.Muted)
+    }
+}
+
+@Composable
+private fun SoarIntField(label: String, value: Int, values: List<Int>, onChange: (Int) -> Unit) {
+    WhiteDnsDropdownField(label = label, value = value, options = (values + value).distinct().sorted().map { Choice(it, it.toString()) }, onValueChange = onChange)
+}
