@@ -4,6 +4,14 @@
 
 # WhiteDNS
 
+<p align="center">
+  <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases/latest"><strong>⬇ Download latest release / دانلود آخرین نسخه</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases/download/1.6.6/WhiteDNS-1.6.6-universal.apk">Android APK 1.6.6 — all architectures</a>
+</p>
+
+**[All releases / همهٔ نسخه‌ها](https://github.com/WhiteDNS/WhiteDNS-Android/releases)**
+
 WhiteDNS is an Android application for running a local DNS tunneling client with proxy and VPN modes.
 
 > **NOTICE:** WhiteDNS is source-available proprietary software. The code is published for transparency, review, and contribution to this official project only. You may not copy the app into a separate product, publish modified builds, repackage APKs, redistribute binaries, clone the branding, or reuse the WhiteDNS name, logo, icon, design, or visual identity.
