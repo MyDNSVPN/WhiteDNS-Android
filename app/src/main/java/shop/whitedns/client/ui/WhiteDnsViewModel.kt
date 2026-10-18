@@ -260,10 +260,12 @@ class WhiteDnsViewModel(
 
     suspend fun importProfiles(raw: String, allowHttp: Boolean): Result<Unit> = subscriptionMutex.withLock {
         runCatching {
-            check(uiState.connectionStatus == ConnectionStatus.DISCONNECTED) { "Disconnect before importing a subscription" }
             val web = raw.trim().startsWith("https://", true) || raw.trim().startsWith("http://", true)
+            check(if (web) uiState.connectionStatus == ConnectionStatus.DISCONNECTED else uiState.connectionStatus != ConnectionStatus.CONNECTING) {
+                if (web) "Disconnect before importing a subscription" else "Wait for the current connection attempt to finish"
+            }
             val document = if (web) withContext(Dispatchers.IO) { fetchSubscription(raw.trim(), allowHttp) } else null
-            check(uiState.connectionStatus == ConnectionStatus.DISCONNECTED) { "Disconnect before changing profiles" }
+            check(!web || uiState.connectionStatus == ConnectionStatus.DISCONNECTED) { "Disconnect before changing subscription profiles" }
             val next = if (document != null) uiState.settings.applySubscription(document, selectImported = true)
                 else uiState.settings.importStormDnsProfileLinks(raw)
             updateSettings(next)
