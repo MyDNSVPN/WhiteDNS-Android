@@ -20,15 +20,16 @@ let browser,engine,log;
  const started=Date.now();while(!fs.readFileSync(logfile,'utf8').includes('SOAR_READY authenticated=1 https=1')){if(engine.exitCode!==null)throw Error('Engine failed before readiness; inspect the private log');if(Date.now()-started>120000)throw Error('Engine startup timeout');await pause(200);}
  const engineStartupSeconds=(Date.now()-started)/1000;
  browser=await chromium.launch({headless:true,...(process.env.SOAR_CHROME?{executablePath:process.env.SOAR_CHROME}:{}),proxy:{server:'socks5://127.0.0.1:'+port},args:['--disable-quic','--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1']});
- const context=await browser.newContext();const results=[];
- if(args['expected-ip']){const page=await context.newPage();await page.goto('https://api.ipify.org/',{waitUntil:'domcontentloaded',timeout:90000});const ip=(await page.locator('body').innerText()).trim();if(ip!==args['expected-ip'])throw Error('Unexpected tunnel exit IP');await page.close();}
+ const results=[];
+ if(args['expected-ip']){const context=await browser.newContext();const page=await context.newPage();await page.goto('https://api.ipify.org/',{waitUntil:'domcontentloaded',timeout:90000});const ip=(await page.locator('body').innerText()).trim();if(ip!==args['expected-ip'])throw Error('Unexpected tunnel exit IP');await context.close();}
  for(const url of args.url||['https://example.com/','https://amazon.co.uk/']){
   if(new URL(url).protocol!=='https:')throw Error('Qualification URLs must use HTTPS');
-  const page=await context.newPage(),responses=[],failures=[];page.on('response',r=>responses.push({url:cleanURL(r.url()),status:r.status()}));page.on('requestfailed',r=>{if(r.failure()?.errorText!=='net::ERR_ABORTED')failures.push({url:cleanURL(r.url()),error:r.failure()?.errorText});});
+  // A fresh context prevents a repeat from passing solely through a browser cache.
+  const context=await browser.newContext();const page=await context.newPage(),responses=[],failures=[];page.on('response',r=>responses.push({url:cleanURL(r.url()),status:r.status()}));page.on('requestfailed',r=>{if(r.failure()?.errorText!=='net::ERR_ABORTED')failures.push({url:cleanURL(r.url()),error:r.failure()?.errorText});});
   const start=Date.now();let status=0,error='';try{const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:90000});status=response?.status()||0;}catch(e){error=e.message.split('\n')[0];}
   const domSeconds=(Date.now()-start)/1000;await pause(8000);
   const content=await page.evaluate(()=>({title:document.title,htmlBytes:new TextEncoder().encode(document.documentElement.outerHTML).length,resources:performance.getEntriesByType('resource').length,challenge:/continue shopping|captcha|verify you are human/i.test(document.body?.innerText||'')})).catch(()=>({}));
-  const result={url:cleanURL(url),status,domSeconds,responses:responses.length,failedResources:failures.length,failures,httpErrors:responses.filter(r=>r.status>=400),error,...content};results.push(result);console.log(JSON.stringify(result));await page.screenshot({path:path.join(out,'page-'+results.length+'.png'),timeout:10000}).catch(()=>{});await page.close();
+  const result={url:cleanURL(url),status,domSeconds,responses:responses.length,failedResources:failures.length,failures,httpErrors:responses.filter(r=>r.status>=400),error,...content};results.push(result);console.log(JSON.stringify(result));await page.screenshot({path:path.join(out,'page-'+results.length+'.png'),timeout:10000}).catch(()=>{});await context.close();
  }
  fs.writeFileSync(path.join(out,'results.json'),JSON.stringify({engineStartupSeconds,results},null,2),{mode:0o600});
  if(results.some(r=>r.error||!r.status))process.exitCode=1;
