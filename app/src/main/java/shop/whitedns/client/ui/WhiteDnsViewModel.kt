@@ -97,6 +97,12 @@ import shop.whitedns.client.vpn.WhiteDnsVpnService
 import shop.whitedns.client.vpn.WhiteDnsVpnEvent
 import shop.whitedns.client.vpn.WhiteDnsVpnEvents
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import shop.whitedns.client.model.applySubscription
+import shop.whitedns.client.model.fetchSubscription
+import shop.whitedns.client.model.importStormDnsProfileLinks
+
 class WhiteDnsViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
@@ -249,6 +255,56 @@ class WhiteDnsViewModel(
         }
     }
 
+    private val subscriptionMutex = Mutex()
+    private var lastAutomaticSubscriptionAttempt = 0L
+
+    suspend fun importProfiles(raw: String, allowHttp: Boolean): Result<Unit> = subscriptionMutex.withLock {
+        runCatching {
+            check(uiState.connectionStatus == ConnectionStatus.DISCONNECTED) { "Disconnect before importing a subscription" }
+            val web = raw.trim().startsWith("https://", true) || raw.trim().startsWith("http://", true)
+            val document = if (web) withContext(Dispatchers.IO) { fetchSubscription(raw.trim(), allowHttp) } else null
+            check(uiState.connectionStatus == ConnectionStatus.DISCONNECTED) { "Disconnect before changing profiles" }
+            val next = if (document != null) uiState.settings.applySubscription(document, selectImported = true)
+                else uiState.settings.importStormDnsProfileLinks(raw)
+            updateSettings(next)
+            appendLog(if (web) "Subscription imported" else "Imported connection profiles")
+        }.onFailure { if (it is CancellationException) throw it }
+    }
+
+    suspend fun refreshSubscriptions(onlyDue: Boolean = false): Result<Unit> = subscriptionMutex.withLock {
+        runCatching {
+            check(uiState.connectionStatus == ConnectionStatus.DISCONNECTED) { "Disconnect before refreshing subscriptions" }
+            val now = System.currentTimeMillis()
+            val sources = uiState.settings.normalizedConnectionProfiles().mapNotNull { it.subscription }.distinctBy { it.url }
+                .filter { !onlyDue || now - it.updatedAt >= it.intervalHours * 3_600_000L }
+            var failures = 0
+            for (source in sources) {
+                try {
+                    val document = withContext(Dispatchers.IO) { fetchSubscription(source.url, source.allowHttp) }
+                    check(uiState.connectionStatus == ConnectionStatus.DISCONNECTED) { "Disconnect before refreshing subscriptions" }
+                    // A user may delete the source while the request is in flight. Do not recreate it.
+                    if (uiState.settings.normalizedConnectionProfiles().any { it.subscription?.url == source.url }) {
+                        updateSettings(uiState.settings.applySubscription(document))
+                    }
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    failures++
+                }
+            }
+            check(failures == 0) { "$failures subscription(s) could not be refreshed. Saved profiles were retained; check the connection or ask the provider" }
+            if (sources.isNotEmpty()) appendLog("Subscriptions refreshed")
+        }.onFailure { if (it is CancellationException) throw it }
+    }
+
+    private fun refreshSubscriptionsIfDue() {
+        val now = System.currentTimeMillis()
+        if (now - lastAutomaticSubscriptionAttempt < 300_000 || uiState.connectionStatus != ConnectionStatus.DISCONNECTED) return
+        lastAutomaticSubscriptionAttempt = now
+        viewModelScope.launch {
+            refreshSubscriptions(onlyDue = true).onFailure { appendLog("Subscription refresh unavailable; saved profiles retained") }
+        }
+    }
+
     fun importProfileLink(rawLink: String) {
         runCatching {
             uiState.settings
@@ -316,6 +372,7 @@ class WhiteDnsViewModel(
                     markRuntimeDisconnected("Connection stopped")
                 }
             }
+            refreshSubscriptionsIfDue()
         }
     }
 

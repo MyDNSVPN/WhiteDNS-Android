@@ -244,6 +244,7 @@ data class ConnectionProfile(
     val engine: String = DnsClientEngine.StormDns,
     val cottenSettings: CottenDnsProfileSettings = CottenDnsProfileSettings(),
     val soarSettings: SoarProfileSettings = SoarProfileSettings(),
+    val subscription: SubscriptionSource? = null,
 ) : Serializable {
     companion object {
         const val DefaultId = "default"

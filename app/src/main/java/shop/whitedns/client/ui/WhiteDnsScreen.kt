@@ -213,6 +213,8 @@ import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.core.content.FileProvider
 
@@ -231,6 +233,8 @@ fun WhiteDnsScreen(
     onScanResumeClick: () -> Unit,
     onServerTestClick: (String?) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
+    onImportProfiles: suspend (String, Boolean) -> Result<Unit>,
+    onRefreshSubscriptions: suspend () -> Result<Unit>,
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(WhiteDnsTab.CONNECT) }
     var profileCreateRequest by rememberSaveable { mutableStateOf<ProfileCreateRequest?>(null) }
@@ -271,6 +275,8 @@ fun WhiteDnsScreen(
                         },
                         onServerTestClick = onServerTestClick,
                         onSettingsChange = onSettingsChange,
+                        onImportProfiles = onImportProfiles,
+                        onRefreshSubscriptions = onRefreshSubscriptions,
                     )
                     WhiteDnsTab.CONNECT -> ConnectTabContent(
                         uiState = uiState,
@@ -1295,6 +1301,8 @@ private fun ProfilesTabContent(
     onCreateRequestConsumed: () -> Unit,
     onServerTestClick: (String?) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
+    onImportProfiles: suspend (String, Boolean) -> Result<Unit>,
+    onRefreshSubscriptions: suspend () -> Result<Unit>,
 ) {
     var selectedProfileTab by rememberSaveable { mutableStateOf(ProfileTab.CONNECTION) }
     var connectionCreateRequestId by rememberSaveable { mutableStateOf(0) }
@@ -1361,6 +1369,8 @@ private fun ProfilesTabContent(
                         openCreateRequestId = connectionCreateRequestId,
                         onServerTestClick = onServerTestClick,
                         onSettingsChange = onSettingsChange,
+                        onImportProfiles = onImportProfiles,
+                        onRefreshSubscriptions = onRefreshSubscriptions,
                     )
                     ProfileTab.RESOLVER -> ResolverProfilesSettings(
                         settings = uiState.settings,
@@ -3448,6 +3458,8 @@ internal fun ConnectionProfilesSettings(
     openCreateRequestId: Int,
     onServerTestClick: (String?) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
+    onImportProfiles: suspend (String, Boolean) -> Result<Unit>,
+    onRefreshSubscriptions: suspend () -> Result<Unit>,
 ) {
     val profiles = settings.normalizedConnectionProfiles()
     val selectedProfile = settings.selectedConnectionProfile()
@@ -3460,6 +3472,9 @@ internal fun ConnectionProfilesSettings(
     var dialogProfile by remember { mutableStateOf<ConnectionProfile?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
+    var scannedSubscription by remember { mutableStateOf("") }
+    var subscriptionBusy by remember { mutableStateOf(false) }
+    val subscriptionScope = rememberCoroutineScope()
     var exportProfile by remember { mutableStateOf<ConnectionProfile?>(null) }
     var showExportAllDialog by remember { mutableStateOf(false) }
     var showDeleteDuplicatesDialog by remember { mutableStateOf(false) }
@@ -3472,13 +3487,17 @@ internal fun ConnectionProfilesSettings(
     val duplicateProfileCount = settings.duplicateConnectionProfileCount()
     val shareSubjectProfileLabel = WhiteDnsL10n.shareSubjectProfile
     val shareChooserProfileLabel = WhiteDnsL10n.shareChooserProfile
+    val subscriptionSuccessLabel = soarText("Subscriptions refreshed", "ساب‌ها تازه‌سازی شدند")
     val importSuccessLabel = WhiteDnsL10n.profileImportSuccess
     val importErrorProfileLabel = WhiteDnsL10n.errorImportProfile
     var importNotice by remember { mutableStateOf<String?>(null) }
     var importNoticeIsError by remember { mutableStateOf(false) }
     val qrScanner = rememberQrProfileImportLauncher(
         onDecoded = { decodedLink ->
-            runCatching {
+            if (decodedLink.startsWith("https://", true) || decodedLink.startsWith("http://", true)) {
+                scannedSubscription = decodedLink
+                showImportDialog = true
+            } else runCatching {
                 settings.importStormDnsProfileLinks(decodedLink)
             }.onSuccess { importedSettings ->
                 importNoticeIsError = false
@@ -3560,6 +3579,41 @@ internal fun ConnectionProfilesSettings(
             ),
         )
     )
+    val subscriptionSources = profiles.mapNotNull { it.subscription }.distinctBy { it.url }
+    if (subscriptionSources.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
+        CompactActionButton(
+            modifier = Modifier.fillMaxWidth(),
+            label = if (subscriptionBusy) soarText("Refreshing…", "در حال تازه‌سازی…") else soarText("Refresh subscriptions", "تازه‌سازی ساب‌ها"),
+            emphasized = false,
+            enabled = !subscriptionBusy && connectionStatus == ConnectionStatus.DISCONNECTED,
+            onClick = {
+                subscriptionScope.launch {
+                    subscriptionBusy = true
+                    try {
+                        onRefreshSubscriptions().onSuccess {
+                            importNoticeIsError = false
+                            importNotice = subscriptionSuccessLabel
+                        }.onFailure {
+                            importNoticeIsError = true
+                            importNotice = it.message
+                        }
+                    } finally { subscriptionBusy = false }
+                }
+            },
+        )
+        Text(soarText("Automatic refresh when the app opens and the interval is due. Disconnect to refresh. Failed downloads keep your saved profiles.", "ساب‌ها هنگام بازشدن اپ و رسیدن زمان تازه‌سازی بررسی می‌شوند. برای تازه‌سازی قطع اتصال کنید. در خطای دریافت، پروفایل ذخیره‌شده حفظ می‌شود."),
+            style = MaterialTheme.typography.bodySmall, color = WhiteDnsPalette.Muted)
+        subscriptionSources.forEach { source ->
+            val used = source.upload.toDouble() + source.download.toDouble()
+            val usage = "%.2f / %s GiB".format(java.util.Locale.US, used / (1024 * 1024 * 1024), if (source.total == 0L) "∞" else "%.2f".format(java.util.Locale.US, source.total.toDouble() / (1024 * 1024 * 1024)))
+            val dateFormat = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT)
+            val expires = if (source.expiresAt == 0L) soarText("No expiry", "بدون انقضا") else dateFormat.format(java.util.Date(source.expiresAt))
+            val updated = dateFormat.format(java.util.Date(source.updatedAt))
+            Text("${java.net.URI(source.url).host} · $usage", style = MaterialTheme.typography.bodySmall, color = WhiteDnsPalette.Muted)
+            Text(soarText("Expires: $expires · Updated: $updated", "انقضا: $expires · تازه‌سازی: $updated"), style = MaterialTheme.typography.bodySmall, color = WhiteDnsPalette.Muted)
+        }
+    }
     importNotice?.let { message ->
         Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
         Text(
@@ -3749,11 +3803,10 @@ internal fun ConnectionProfilesSettings(
     if (showImportDialog) {
         ConnectionProfileImportDialog(
             onDismiss = { showImportDialog = false },
-            onImport = { links ->
-                runCatching {
-                    settings.importStormDnsProfileLinks(rawLinks = links)
-                }.onSuccess { importedSettings ->
-                    onSettingsChange(importedSettings)
+            initialValue = scannedSubscription,
+            onImport = { links, allowHttp ->
+                onImportProfiles(links, allowHttp).onSuccess {
+                    scannedSubscription = ""
                     showImportDialog = false
                 }
             },
@@ -4784,27 +4837,29 @@ private fun ResolverProfileRow(
 @Composable
 private fun ConnectionProfileImportDialog(
     onDismiss: () -> Unit,
-    onImport: (String) -> Result<WhiteDnsSettings>,
+    onImport: suspend (String, Boolean) -> Result<Unit>,
+    initialValue: String = "",
 ) {
-    var profileLinks by remember { mutableStateOf("") }
+    var profileLinks by remember { mutableStateOf(initialValue) }
     var importError by remember { mutableStateOf<String?>(null) }
-    val canImport = profileLinks.trim().isNotEmpty()
+    var busy by remember { mutableStateOf(false) }
+    var allowHttp by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val isHttp = profileLinks.trim().startsWith("http://", true)
+    val canImport = !busy && profileLinks.trim().isNotEmpty() && (!isHttp || allowHttp)
     val errorImportProfileLabel = WhiteDnsL10n.errorImportProfile
     val qrScanner = rememberQrProfileImportLauncher(
         onDecoded = { decodedLink ->
             profileLinks = decodedLink
             importError = null
-            onImport(decodedLink)
-                .onFailure { error ->
-                    importError = error.message ?: errorImportProfileLabel
-                }
+
         },
         onError = { message ->
             importError = message
         },
     )
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -4826,10 +4881,10 @@ private fun ConnectionProfileImportDialog(
                 label = WhiteDnsL10n.profileFieldProfileLinks,
                 value = profileLinks,
                 onValueChange = {
-                    profileLinks = it
+                    if (!busy) profileLinks = it
                     importError = null
                 },
-                placeholder = "stormdns://...\ncottendns://...\nsoar://...",
+                placeholder = "https://panel.example.com/sub/...\nsoar://...",
                 singleLine = false,
                 minLines = 5,
                 maxLines = 9,
@@ -4838,9 +4893,16 @@ private fun ConnectionProfileImportDialog(
                 modifier = Modifier.fillMaxWidth(),
                 label = WhiteDnsL10n.profileBtnScanQr,
                 emphasized = false,
-                enabled = true,
+                enabled = !busy,
                 onClick = qrScanner,
             )
+            if (isHttp) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = allowHttp, onCheckedChange = { if (!busy) allowHttp = it }, enabled = !busy)
+                    Text(soarText("Allow unencrypted HTTP for this subscription. Its address and keys can be exposed. HTTPS is recommended.", "اجازهٔ HTTP بدون رمزنگاری برای این ساب؛ آدرس و کلیدها ممکن است افشا شوند. HTTPS پیشنهاد می‌شود."), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (busy) Text(soarText("Downloading subscription…", "در حال دریافت ساب…"), color = WhiteDnsPalette.Muted)
             importError?.let { message ->
                 Spacer(modifier = Modifier.height(WhiteDnsSpacing.iconSpacing))
                 Text(
@@ -4860,7 +4922,7 @@ private fun ConnectionProfileImportDialog(
                     modifier = Modifier.weight(1f),
                     label = WhiteDnsL10n.btnCancel,
                     emphasized = false,
-                    enabled = true,
+                    enabled = !busy,
                     onClick = onDismiss,
                 )
                 CompactActionButton(
@@ -4869,10 +4931,14 @@ private fun ConnectionProfileImportDialog(
                     emphasized = true,
                     enabled = canImport,
                     onClick = {
-                        onImport(profileLinks)
-                            .onFailure { error ->
-                                importError = error.message ?: errorImportProfileLabel
-                            }
+                        scope.launch {
+                            busy = true
+                            try {
+                                onImport(profileLinks, allowHttp).onFailure { error ->
+                                    importError = error.message ?: errorImportProfileLabel
+                                }
+                            } finally { busy = false }
+                        }
                     },
                 )
             }
@@ -5494,6 +5560,7 @@ private fun ConnectionProfileDialog(
                                 engine = engine,
                                 cottenSettings = cotten.normalized(),
                                 soarSettings = soar.normalized(),
+                                subscription = profile?.subscription,
                             ),
                         )
                     },
