@@ -61,9 +61,9 @@ type config struct {
 
 func defaults() config {
 	return config{Listen: "127.0.0.1:10886", Soar: options{
-		Transport: "auto", Discovery: true, Country: "IR", DiscoveryWant: 8,
-		DiscoveryConcurrency: 4, DiscoveryPaceMs: 500, SafeQName: 101, MaxQName: 253,
-		MaxAnswer: 1232, HoldMs: 500, MaxInflight: 128, MaxPathWindow: 32, MaxStreams: 64,
+		Transport: "auto", Discovery: true, Country: "IR", DiscoveryWant: 2,
+		DiscoveryConcurrency: 2, DiscoveryPaceMs: 1000, SafeQName: 101, MaxQName: 253,
+		MaxAnswer: 1232, HoldMs: 500, MaxInflight: 128, MaxPathWindow: 32, MaxStreams: 128,
 		StreamWindowKiB: 256, SendBufferKiB: 64, SessionIdleSeconds: 90, DialTimeoutSeconds: 90,
 	}}
 }
@@ -408,6 +408,7 @@ func telemetry(ctx context.Context, p *proxy, client *soar.Client) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	var previousUp, previousDown int64
+	ticks := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -416,6 +417,18 @@ func telemetry(ctx context.Context, p *proxy, client *soar.Client) {
 			up, down := p.upload.Load(), p.download.Load()
 			fmt.Printf("WD_TRAFFIC %d B/s (Total: %d B) | %d B/s (Total: %d B)\n", up-previousUp, up, down-previousDown, down)
 			previousUp, previousDown = up, down
+			ticks++
+			if ticks%5 == 0 {
+				var detail []string
+				for _, path := range client.PathStats() {
+					if path.Verified && len(detail) < 4 {
+						detail = append(detail, fmt.Sprintf("%s/%s rtt=%dms loss=%.0f%% qname=%d answer=%d window=%.1f suspended=%t", path.Resolver, path.Transport, path.RTT.Milliseconds(), path.Loss*100, path.NameLen, path.AnswerLimit, path.Window, path.Suspended))
+					}
+				}
+				if len(detail) > 0 {
+					fmt.Println("SOAR_PATHS " + strings.Join(detail, "; "))
+				}
+			}
 			var active, valid []string
 			for _, path := range client.PathStats() {
 				if path.Verified && len(valid) < 64 {
@@ -517,7 +530,7 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	if *version {
-		fmt.Println("WhiteDNS Soar engine alpha3; Soar v0.2.2")
+		fmt.Println("WhiteDNS Soar engine 1.6.7-beta1; Soar v0.2.2 + WhiteDNS transport fixes")
 		return nil
 	}
 	if *configFile == "" || *resolverFile == "" || fs.NArg() != 0 {

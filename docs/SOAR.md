@@ -50,3 +50,45 @@ Tests on available external networks and a phone in Thailand are evidence for
 those environments. Operation inside Iran, operator differences, screen-off
 and network switching still need field verification. No country-wide
 availability guarantee is made.
+
+
+## Browser reliability update (1.6.7-beta1)
+
+The original connectivity probe only establishes that a small HTTPS request can
+cross the tunnel. It does not qualify concurrent browser handshakes or complete
+pages. This update changes the Soar client transport, not the wire protocol:
+
+- Bound simultaneous initial stream flights, with priority for small writes on
+  established streams and a reserved scheduling share for bulk uploads.
+- Compare long query-name probes with short-name canaries before accepting a
+  size-specific downgrade. General congestion no longer pins a healthy path to
+  a 101-character name for the rest of its lifetime. Probe intermediate lengths
+  and retry after a temporary restriction.
+- Emit `SOAR_PATHS` diagnostics with RTT, recent loss, accepted query/answer budgets
+  and congestion window. These lines contain resolver state, not browsing URLs.
+
+Install the new signed APK and reimport a freshly exported adaptive profile from
+the panel. Existing explicitly capped profiles keep their limits. A fixed
+MaxQName=101 profile has very little upload payload per DNS request, especially
+with a long per-account zone; it should be reserved for paths that actually need
+that restriction. The adaptive profile still starts at SafeQName=101.
+
+The modified Apache-2.0 sources and their original Lantern attribution are in
+`soar-engine/third_party/soar`. Upstream wire vectors and tests are retained.
+This is a WhiteDNS transport patch based on Soar v0.2.2, not an upstream release.
+Public browser tests must distinguish an Amazon HTTP anti-bot response from a
+transport failure. Android Full VPN on a physical phone and Iranian networks
+still require device/network validation; a desktop SOCKS test cannot prove them.
+
+
+Opt-in browser reproduction (requires Playwright, Chrome/Chromium and a private
+JSON profile export; never commit the profile or output directory):
+
+```sh
+node scripts/soar-browser-probe.cjs --engine PATH_TO_SOAR_CORE --profile PRIVATE_PROFILE.json --output PRIVATE_DIR --expected-ip SERVER_IP --url https://example.com/ --url https://amazon.co.uk/ --url https://www.mozilla.org/en-US/
+```
+
+`SOAR_PLAYWRIGHT` can point to the Playwright module and `SOAR_CHROME` to Chrome.
+The test uses SOCKS remote DNS, validates HTTPS certificates, records actual
+responses/resource failures and identifies challenge pages. A challenge response
+is reachable transport, not proof that the site's complete service is available.

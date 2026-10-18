@@ -85,6 +85,14 @@ jobs:
           go test ./... -count=1 -timeout 90s
           go vet ./...
 
+      - name: Test patched Soar transport and wire compatibility
+        working-directory: soar-engine/third_party/soar
+        run: |
+          go mod verify
+          go test ./... -count=1 -timeout 120s
+          go test -race ./... -count=1 -timeout 300s
+          go vet ./...
+
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest
 

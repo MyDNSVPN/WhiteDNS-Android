@@ -1,2 +1,5 @@
 *.sh text eol=lf
 soar-engine/data/resolvers/*.txt text eol=lf
+
+soar-engine/third_party/soar/testdata/*.json text eol=lf
+soar-engine/third_party/soar/data/**/*.txt text eol=lf
