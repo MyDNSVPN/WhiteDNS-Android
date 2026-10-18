@@ -128,6 +128,10 @@ SOFTWARE.
 
 ## Experimental Soar engine
 
-Soar v0.2.2 (Apache-2.0), golang.org/x/crypto v0.52.0 and golang.org/x/sys v0.45.0 (BSD), and Go runtime (BSD).
+Soar v0.2.3 (Apache-2.0), golang.org/x/crypto v0.52.0 and golang.org/x/sys v0.45.0 (BSD), and Go runtime (BSD).
 Full license texts and the KevinNet DNS data notice are packaged in `app/src/main/assets/soar-third-party-notices.txt`.
 The engine uses the upstream Soar protocol without modifying its wire format.
+WhiteDNS 1.6.7 adds client scheduling and query-size adaptation changes; these
+are WhiteDNS modifications to Lantern code, documented in
+`soar-engine/third_party/soar/WHITEDNS_CHANGES.md`. The upstream author and license
+remain unchanged.

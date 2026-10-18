@@ -80,6 +80,14 @@ jobs:
           go test ./... -count=1 -timeout 90s
           go vet ./...
 
+      - name: Test patched Soar transport and wire compatibility
+        working-directory: soar-engine/third_party/soar
+        run: |
+          go mod verify
+          go test ./... -count=1 -timeout 120s
+          go test -race ./... -count=1 -timeout 300s
+          go vet ./...
+
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
 
@@ -167,9 +175,9 @@ jobs:
             printf 'Official WhiteDNS release %s. See README and THIRD_PARTY_NOTICES.md.\n' "$TAG_NAME" > "$NOTES_FILE"
           fi
 
-          release_flags=()
+          release_flags=(--latest=true)
           if [[ "${TAG_NAME}" =~ (alpha|beta|rc) ]]; then
-            release_flags+=(--prerelease)
+            release_flags=(--prerelease --latest=false)
           fi
 
           if gh release view "${TAG_NAME}" >/dev/null 2>&1; then

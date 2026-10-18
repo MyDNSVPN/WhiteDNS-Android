@@ -1,5 +1,9 @@
+WhiteDNS 1.6.7 transport modifications: bounded initial flights and adaptive query-size learning.
+Original Lantern Soar v0.2.3 source and Apache-2.0 license retained.
+See soar-engine/third_party/soar/WHITEDNS_CHANGES.md in the source release.
+
 WhiteDNS experimental Soar engine: third-party notices
-Soar v0.2.2 / f0d55048c7035786265e2b671a45c4faf5b97a92
+Soar v0.2.3 / a8af533d82284f5e6ab13b706552596c108bacf2
 https://github.com/getlantern/soar
 
 ===== Go-LICENSE.txt =====

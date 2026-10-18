@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -79,7 +81,7 @@ func TestScannerRequiresHTTPSRatherThanOnlyAuthentication(t *testing.T) {
 
 // Forward a single client's DNS datagrams. Large responses are dropped and
 // every forwarded packet is delayed; blocked can disable a path mid-session.
-func restrictedResolver(t *testing.T, server string, blocked *atomic.Bool) string {
+func restrictedResolver(t *testing.T, server string, blocked *atomic.Bool, maxNames ...int) string {
 	t.Helper()
 	pc, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
@@ -109,6 +111,22 @@ func restrictedResolver(t *testing.T, server string, blocked *atomic.Bool) strin
 				}
 				target = client
 			} else {
+				if len(maxNames) > 0 {
+					off, total := 12, 0
+					for off < n && buf[off] != 0 {
+						size := int(buf[off])
+						off++
+						if size > 63 || off+size > n {
+							total = 999
+							break
+						}
+						total += size + 1
+						off += size
+					}
+					if total-1 > maxNames[0] {
+						continue
+					}
+				}
 				client = from
 			}
 			data := append([]byte{}, buf[:n]...)
@@ -152,5 +170,53 @@ func TestConservativeHTTPSRecoversAfterOneDNSPathIsBlocked(t *testing.T) {
 	firstBlocked.Store(true)
 	if err := startupHTTPS(ctx, client.DialContext, roots); err != nil {
 		t.Fatal("second resolver did not recover", err)
+	}
+}
+
+// The exported profile may allow large names even though the network accepts only
+// an intermediate size and small answers. A successful handshake alone is not enough.
+func TestAdaptiveHTTPSWithFilteredQueryAndAnswerSizes(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, strings.Repeat("validated-body", 400)) }))
+	defer origin.Close()
+	direct, cfg := tunnel(t, func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, origin.Listener.Addr().String())
+	})
+	var blocked atomic.Bool
+	resolver := restrictedResolver(t, direct.PathStats()[0].Resolver, &blocked, 150)
+	cfg.Soar.MaxQName = 253
+	cfg.Soar.MaxAnswer = 1232
+	client, err := soar.NewClient(cfg.clientConfig([]string{resolver}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	roots := x509.NewCertPool()
+	roots.AddCert(origin.Certificate())
+	tr := &http.Transport{DialContext: client.DialContext, TLSClientConfig: &tls.Config{RootCAs: roots}, DisableKeepAlives: true}
+	defer tr.CloseIdleConnections()
+	hc := &http.Client{Transport: tr, Timeout: 20 * time.Second}
+	learned := false
+	deadline := time.Now().Add(35 * time.Second)
+	for time.Now().Before(deadline) {
+		r, e := hc.Get("https://example.com/")
+		if e != nil {
+			t.Fatal("filtered path failed", e)
+		}
+		body, e := io.ReadAll(r.Body)
+		r.Body.Close()
+		if e != nil || string(body) != strings.Repeat("validated-body", 400) {
+			t.Fatal("filtered path corrupted HTTPS body", e)
+		}
+		for _, p := range client.PathStats() {
+			if p.Verified && p.NameLen > 101 && p.NameLen <= 152 {
+				learned = true
+			}
+		}
+		if learned {
+			break
+		}
+	}
+	if !learned {
+		t.Fatal("never learned an intermediate name budget on a filtered path")
 	}
 }

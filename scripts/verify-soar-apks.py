@@ -1,9 +1,11 @@
 """Require every packaged ABI to include its source-built Soar executable."""
 from pathlib import Path
 import sys
+import re
 import zipfile
 
 root = Path(__file__).resolve().parents[1]
+version = re.search(r'fmt.Println\("(WhiteDNS Soar engine[^"]+)"\)', (root / 'soar-engine/main.go').read_text()).group(1).encode()
 directory = Path(sys.argv[1])
 apks = list(directory.glob('*.apk'))
 assert apks, 'No APKs to verify'
@@ -16,5 +18,6 @@ for path in apks:
             data = apk.read(f'lib/{abi}/libsoar_client.so')
             assert data == (root / f'app/src/main/jniLibs/{abi}/libsoar_client.so').read_bytes(), abi
             assert data[:4] == b'\x7fELF'
+            assert version in data, f'{path.name}: stale Soar engine version for {abi}'
         assert b'Apache' in apk.read('assets/soar-third-party-notices.txt')
     print(f'{path.name}: Soar present and source-built bytes match ({len(native)} ABIs)')

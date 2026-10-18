@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases/latest"><strong>⬇ Download latest release / دانلود آخرین نسخه</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases/download/1.6.6/WhiteDNS-1.6.6-universal.apk">Android APK 1.6.6 — all architectures</a>
+  <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases/download/1.6.7/WhiteDNS-1.6.7-universal.apk">Android APK 1.6.7 — all architectures</a>
 </p>
 
 **[All releases / همهٔ نسخه‌ها](https://github.com/WhiteDNS/WhiteDNS-Android/releases)**
@@ -41,7 +41,7 @@ The Android VPN path also packages `tun2proxy`; see [THIRD_PARTY_NOTICES.md](./T
 
 ## Soar server and Iran profiles
 
-See [docs/SOAR.md](docs/SOAR.md) for IR/GLOBAL discovery, Conservative settings,
+See [docs/SOAR.md](docs/SOAR.md) for IR/GLOBAL discovery, adaptive settings,
 network limits and the [guided server installer](https://github.com/WhiteDNS/Soar-Server).
 
 ## Project Structure
