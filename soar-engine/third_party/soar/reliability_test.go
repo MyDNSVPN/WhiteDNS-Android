@@ -152,3 +152,45 @@ func TestSilentInitialFlightsCannotBlockTheQueueForever(t *testing.T) {
 		t.Fatal("silent peer permanently blocked queued streams")
 	}
 }
+
+func TestQueuedInitialFlightsDoNotAnnouncePeerStreams(t *testing.T) {
+	s := newSession(true, streamConfig{StreamWindow: 256 << 10, SendBuffer: 65536, MaxStreams: 64}, nil, nil)
+	for i := 0; i < 12; i++ {
+		st, e := s.openStream()
+		if e != nil {
+			t.Fatal(e)
+		}
+		st.sbuf = make([]byte, 2048)
+		st.spending.add(0, 2048)
+	}
+	_, _, _, packet := s.build(nil, 512, time.Now(), 0)
+	if packet == nil {
+		t.Fatal("no packet")
+	}
+	for _, c := range packet.ctrls {
+		if c.typ == frMaxStream && c.id >= 2 {
+			t.Fatal("queued stream announced before its initial slot", c.id)
+		}
+	}
+	if len(s.ctrlQ) < 10 {
+		t.Fatal("queued window grants were discarded")
+	}
+}
+func TestStartupCapacityRespectsActualQueryBudgets(t *testing.T) {
+	z, e := parseZone("7qa42rlvyy6d6hazem33ajcl5q.soar.example.com")
+	if e != nil {
+		t.Fatal(e)
+	}
+	c := &Client{z: z, cfg: Config{MaxInflight: 128, MaxPathWindow: 32}}
+	c.paths = []*path{{verified: true, nameLen: 101, cwnd: 8, hasRTT: true, srtt: 250 * time.Millisecond}, {verified: true, nameLen: 101, cwnd: 8, hasRTT: true, srtt: 250 * time.Millisecond}}
+	if got := c.startupCapacityLocked(time.Now()); got != 2 {
+		t.Fatal("slow link overcommitted", got)
+	}
+	for _, p := range c.paths {
+		p.nameLen = 253
+		p.cwnd = 32
+	}
+	if got := c.startupCapacityLocked(time.Now()); got != 8 {
+		t.Fatal("healthy link unnecessarily serialized", got)
+	}
+}

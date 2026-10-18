@@ -1,7 +1,7 @@
 # WhiteDNS transport changes — 2026-10-18
 
-Original: Lantern Soar v0.2.2, commit f0d55048c7035786265e2b671a45c4faf5b97a92.
-Source: https://github.com/getlantern/soar/tree/v0.2.2
+Original: Lantern Soar v0.2.3, commit a8af533d82284f5e6ab13b706552596c108bacf2.
+Source: https://github.com/getlantern/soar/tree/v0.2.3
 License: Apache-2.0 (the complete upstream LICENSE is retained).
 
 WhiteDNS modifies client.go, session.go and stream.go and adds query_size.go and
@@ -9,7 +9,7 @@ reliability_test.go. These are WhiteDNS modifications, not an upstream release.
 The DNS, packet, crypto and frame encodings are unchanged; the original wire
 vectors must continue to pass without regeneration.
 
-- Bound concurrent initial stream flights, so small DNS query budgets complete
+- Bound concurrent initial stream flights, including their initial window grants, so small DNS query budgets complete
   connection prefaces rather than exposing every origin to an unfinished TLS
   ClientHello. Established small writes have priority; established bulk uploads
   retain at least every fourth scheduling turn. Initial priority is bounded by
@@ -24,3 +24,9 @@ vectors must continue to pass without regeneration.
 
 These changes require a newly built WhiteDNS native Soar core. Updating a server
 or reimporting a link cannot replace the engine already installed on a phone.
+
+Startup concurrency scales from two to eight slots with verified query payload,
+congestion window, loss and RTT, while honoring the total query ceiling.
+
+The v0.2.3 upstream unused-session recovery fix and its cancellation/idle tests
+are included. The server wire protocol remains compatible with v0.2.2.

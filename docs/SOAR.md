@@ -52,7 +52,7 @@ and network switching still need field verification. No country-wide
 availability guarantee is made.
 
 
-## Browser reliability update (1.6.7-beta1)
+## Browser reliability update (1.6.7-beta2)
 
 The original connectivity probe only establishes that a small HTTPS request can
 cross the tunnel. It does not qualify concurrent browser handshakes or complete
@@ -75,7 +75,7 @@ that restriction. The adaptive profile still starts at SafeQName=101.
 
 The modified Apache-2.0 sources and their original Lantern attribution are in
 `soar-engine/third_party/soar`. Upstream wire vectors and tests are retained.
-This is a WhiteDNS transport patch based on Soar v0.2.2, not an upstream release.
+This is a WhiteDNS transport patch based on Soar v0.2.3, not an upstream release.
 Public browser tests must distinguish an Amazon HTTP anti-bot response from a
 transport failure. Android Full VPN on a physical phone and Iranian networks
 still require device/network validation; a desktop SOCKS test cannot prove them.

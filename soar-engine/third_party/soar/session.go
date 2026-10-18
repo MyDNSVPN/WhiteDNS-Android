@@ -78,6 +78,7 @@ type session struct {
 	rr             []uint64 // stream ids in round-robin order
 	startupOwners  map[uint64]time.Time
 	startupRound   uint64
+	startupLimit   int
 	startupScratch []uint64
 	ctrlQ          []ctrl
 
@@ -196,6 +197,7 @@ func (s *session) closeLocked(err error) {
 		return
 	}
 	s.closed, s.closeErr = true, err
+	dbg("session closed client=%t err=%v", s.client, err)
 	for id, st := range s.streams {
 		st.abort(err)
 		delete(s.streams, id)
@@ -526,12 +528,16 @@ func (s *session) startupOrder(now time.Time) {
 			delete(s.startupOwners, id)
 		}
 	}
+	limit := s.startupLimit
+	if limit == 0 {
+		limit = 2
+	}
 	for _, id := range s.rr {
 		st := s.streams[id]
 		if st == nil || st.startupDone || st.rhigh > 0 {
 			continue
 		}
-		if len(s.startupOwners) >= 2 {
+		if len(s.startupOwners) >= limit {
 			break
 		}
 		if _, ok := s.startupOwners[id]; !ok {
@@ -580,18 +586,28 @@ func (s *session) build(b []byte, budget int, now time.Time, replyTo uint64) (pn
 	p := &sentPkt{pn: s.nextPN, at: now, replyTo: replyTo}
 	s.nextPN++
 
-	// Control frames first: they unblock the peer.
-	for len(s.ctrlQ) > 0 {
-		c := s.ctrlQ[0]
+	s.startupOrder(now)
+	// A MAX_STREAM_DATA frame can itself create a peer stream. Do not announce
+	// queued initial flights before they have a startup slot, or the server's
+	// destination-read timeout would run while their first bytes are still queued.
+	pendingCtrl := s.ctrlQ[:0]
+	for i, c := range s.ctrlQ {
+		if s.client && c.typ == frMaxStream {
+			if st := s.streams[c.id]; st != nil && !s.startupAllowed(st) {
+				pendingCtrl = append(pendingCtrl, c)
+				continue
+			}
+		}
 		enc := c.appendTo(nil)
 		if len(enc) > room() {
+			pendingCtrl = append(pendingCtrl, s.ctrlQ[i:]...)
 			break
 		}
 		b = append(b, enc...)
 		p.ctrls = append(p.ctrls, c)
-		s.ctrlQ = s.ctrlQ[1:]
 		data = true
 	}
+	s.ctrlQ = pendingCtrl
 	if len(s.lostQ) > 0 && room() > 4 {
 		slices.Sort(s.lostQ)
 		s.lostQ = slices.Compact(s.lostQ)
@@ -616,7 +632,6 @@ func (s *session) build(b []byte, budget int, now time.Time, replyTo uint64) (pn
 			p.ack = slices.Clone(rs)
 		}
 	}
-	s.startupOrder(now)
 	// Stream data, round-robin across streams so one bulk transfer can't starve the rest.
 	for i := 0; i < len(s.rr) && room() > 3; i++ {
 		id := s.rr[0]

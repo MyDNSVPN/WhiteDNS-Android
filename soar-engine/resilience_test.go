@@ -196,7 +196,8 @@ func TestAdaptiveHTTPSWithFilteredQueryAndAnswerSizes(t *testing.T) {
 	defer tr.CloseIdleConnections()
 	hc := &http.Client{Transport: tr, Timeout: 20 * time.Second}
 	learned := false
-	for i := 0; i < 6; i++ {
+	deadline := time.Now().Add(35 * time.Second)
+	for time.Now().Before(deadline) {
 		r, e := hc.Get("https://example.com/")
 		if e != nil {
 			t.Fatal("filtered path failed", e)

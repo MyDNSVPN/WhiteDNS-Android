@@ -240,6 +240,8 @@ type clientSession struct {
 	ready       chan struct{}
 	established bool
 	backlog     int
+	used        bool      // a stream has been opened on it; guarded by session.mu
+	firstHello  time.Time // when its first hello went out; guarded by Client.mu
 	lastAuth    time.Time // last authenticated answer; guarded by Client.mu
 	// unanswered is when the first query since the last authenticated answer went out (zero if
 	// none has); guarded by Client.mu.
@@ -248,6 +250,16 @@ type clientSession struct {
 
 // errSessionIdle ends a session retired for idling; see Config.SessionIdle.
 var errSessionIdle = errors.New("soar: session idle")
+
+// unusedSessionIdle retires a session that has never carried a stream. The server ends such a
+// session 15 s after its hello (SPEC 7.4), much sooner than an idle one. It is left behind when
+// a Dial's context ends mid-handshake, as when another transport wins a race, and the
+// handshake completes anyway.
+const unusedSessionIdle = 10 * time.Second
+
+// freshSessionGrace spares a session that has only just come up from unusedSessionIdle: a Dial
+// waiting on its handshake is about to open a stream on it.
+const freshSessionGrace = time.Second
 
 // busy reports whether the session has streams open or frames still to deliver.
 func (cs *clientSession) busy() bool {
@@ -260,12 +272,22 @@ func (cs *clientSession) busyLocked() bool {
 	return len(cs.streams) > 0 || len(cs.ctrlQ) > 0 || cs.dataInFlight()
 }
 
-// retireIfIdle ends an established session that has sat idle for limit, checking and closing
-// under one lock so a stream can't open in between. Called with Client.mu held (for lastAuth).
+// retireIfIdle ends an established session that has sat idle for limit, or for
+// unusedSessionIdle if it never carried a stream, checking and closing under one lock so a
+// stream can't open in between. Called with Client.mu held (for lastAuth and firstHello).
 func (cs *clientSession) retireIfIdle(now time.Time, limit time.Duration) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	if !cs.closed && now.Sub(cs.lastAuth) >= limit && !cs.busyLocked() {
+	since := cs.lastAuth
+	if !cs.used {
+		limit = min(limit, unusedSessionIdle)
+		// The server times an unused session from its hello, and a retried hello gets the
+		// same session back, so a slow handshake has already used up part of the limit.
+		if !cs.firstHello.IsZero() && now.Sub(cs.lastAuth) >= freshSessionGrace {
+			since = cs.firstHello
+		}
+	}
+	if !cs.closed && now.Sub(since) >= limit && !cs.busyLocked() {
 		cs.closeLocked(errSessionIdle)
 	}
 }
@@ -407,6 +429,7 @@ func (c *Client) DialContext(ctx context.Context, network, addr string) (net.Con
 		cs.mu.Lock()
 		st, err = cs.openStream()
 		if err == nil {
+			cs.used = true
 			break
 		}
 		cs.mu.Unlock()
@@ -993,9 +1016,36 @@ func (c *Client) sendHellosLocked(cs *clientSession, now time.Time) {
 			continue
 		}
 		p.lastHello = now
+		if cs.firstHello.IsZero() {
+			cs.firstHello = now
+		}
 		c.sendLocked(p, &pendingQuery{p: p, sess: cs, hello: true, scout: true}, payload, now, time.Second)
 		sent++
 	}
+}
+
+// startupCapacityLocked estimates how many 2-KiB initial flights the verified
+// query budgets can carry in about two seconds. Slow links keep two slots;
+// proven larger budgets can start up to eight without serializing healthy paths.
+func (c *Client) startupCapacityLocked(now time.Time) int {
+	bandwidth, windows := float64(0), float64(0)
+	for _, p := range c.paths {
+		if !p.verified || !p.usable(now) {
+			continue
+		}
+		rtt := time.Second
+		if p.hasRTT {
+			rtt = max(p.srtt, 10*time.Millisecond)
+		}
+		window := min(p.cwnd, float64(c.cfg.MaxPathWindow))
+		payload := max(1, c.z.maxPayload(p.nameLen)-4-tagLen-1-8)
+		bandwidth += window * float64(payload) / rtt.Seconds() * (1 - p.lossRate())
+		windows += window
+	}
+	if windows > float64(c.cfg.MaxInflight) {
+		bandwidth *= float64(c.cfg.MaxInflight) / windows
+	}
+	return min(8, max(2, int(bandwidth/1024)))
 }
 
 func (c *Client) sendDataLocked(cs *clientSession, p *path, now time.Time, allowDup bool) {
@@ -1022,6 +1072,7 @@ func (c *Client) sendDataLocked(cs *clientSession, p *path, now time.Time, allow
 	hdr := byte(holdClass<<4 | class)
 
 	cs.mu.Lock()
+	cs.startupLimit = c.startupCapacityLocked(now)
 	pn, plain, data, pkt := cs.build([]byte{hdr}, budget, now, 0)
 	if probe {
 		// Pad to the length under test (inside the seal), or a short probe would "prove" it.
@@ -1089,6 +1140,7 @@ func (c *Client) readLoop() {
 	for {
 		n, _, err := c.pc.ReadFrom(buf)
 		if err != nil {
+			dbg("cli UDP read failed: %v", err)
 			select {
 			case <-c.done:
 				return

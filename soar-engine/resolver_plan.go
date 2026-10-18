@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Snapshots from pinned Soar v0.2.2. The Android build verifies their bytes
+// Snapshots from pinned Soar v0.2.3. The Android build verifies their bytes
 // against that module. See data/THIRD_PARTY.md for provenance and licensing.
 //
 //go:embed data/resolvers/*.txt

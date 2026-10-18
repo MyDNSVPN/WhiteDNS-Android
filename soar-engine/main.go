@@ -530,7 +530,7 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	if *version {
-		fmt.Println("WhiteDNS Soar engine 1.6.7-beta1; Soar v0.2.2 + WhiteDNS transport fixes")
+		fmt.Println("WhiteDNS Soar engine 1.6.7-beta2; Soar v0.2.3 + WhiteDNS transport fixes")
 		return nil
 	}
 	if *configFile == "" || *resolverFile == "" || fs.NArg() != 0 {
