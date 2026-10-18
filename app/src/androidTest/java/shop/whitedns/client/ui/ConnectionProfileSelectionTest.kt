@@ -38,6 +38,8 @@ class ConnectionProfileSelectionTest {
                         connectionStatus = status, serverTestState = ServerTestState(),
                         openCreateRequestId = 0, onServerTestClick = {},
                         onSettingsChange = { settings.value = it },
+                        onImportProfiles = { _, _ -> Result.success(Unit) },
+                        onRefreshSubscriptions = { Result.success(Unit) },
                     )
                 }
             }

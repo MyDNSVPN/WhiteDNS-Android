@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases/latest"><strong>⬇ Download latest release / دانلود آخرین نسخه</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases/download/1.6.7/WhiteDNS-1.6.7-universal.apk">Android APK 1.6.7 — all architectures</a>
+  <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases/download/1.6.8/WhiteDNS-1.6.8-universal.apk">Android APK 1.6.8 — all architectures</a>
 </p>
 
 **[All releases / همهٔ نسخه‌ها](https://github.com/WhiteDNS/WhiteDNS-Android/releases)**
@@ -33,6 +33,7 @@ The Android VPN path also packages `tun2proxy`; see [THIRD_PARTY_NOTICES.md](./T
 - VPN mode using Android `VpnService` and packaged `tun2proxy` native libraries.
 - Built-in and custom server profile support.
 - `stormdns://` and `soar://` profile import/export; tap a connection card to select it.
+- HTTP/HTTPS subscription import and refresh, with stable profiles, quota/expiry snapshots and automatic due refresh while disconnected.
 - Resolver profile management with validation and default resolver assets.
 - Split tunnel options for VPN routing.
 - Runtime connection logs, resolver state, progress, and traffic statistics.
@@ -43,6 +44,28 @@ The Android VPN path also packages `tun2proxy`; see [THIRD_PARTY_NOTICES.md](./T
 
 See [docs/SOAR.md](docs/SOAR.md) for IR/GLOBAL discovery, adaptive settings,
 network limits and the [guided server installer](https://github.com/WhiteDNS/Soar-Server).
+
+## Subscriptions
+
+In Profiles → Connection → Import, paste an HTTPS subscription URL or scan its
+QR code and confirm. WhiteDNS accepts plain or base64 lists of its supported
+profile URI formats. Use Refresh subscriptions while disconnected. Due sources
+also refresh on app open/resume when no tunnel is running; Android background
+refresh is not promised. A failed response keeps saved profiles. Refresh keeps
+profile selection, connection mode and manually selected resolver overrides.
+The summary shows usage, quota and expiry as last retrieved, not live counters.
+
+Subscription URLs are credentials. Prefer HTTPS. HTTP requires explicit consent
+for that source because its address and keys are unencrypted. Certificate checks
+remain enabled and HTTPS cannot redirect to HTTP. Requests are bounded to 1 MiB,
+128 profiles and three redirects. Source URLs are excluded from diagnostics and
+direct profile exports. Provider updates replace the provider-owned settings;
+deleting every profile of a subscription stops its automatic refresh.
+
+The [WhiteDNS Soar panel](https://github.com/WhiteDNS/Soar-Server) provides one
+subscription per account; [the full guide](https://github.com/WhiteDNS/Soar-Server/blob/main/docs/SUBSCRIPTIONS.md)
+explains token/key rotation and backups. Profile-list format compatibility does
+not add support for unrelated Xray/V2Ray protocols.
 
 ## Project Structure
 

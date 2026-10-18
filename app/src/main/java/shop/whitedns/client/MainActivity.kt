@@ -135,6 +135,8 @@ class MainActivity : ComponentActivity() {
                     onScanResumeClick = viewModel::resumeScan,
                     onServerTestClick = { profileId -> viewModel.beginServerTest(profileId) },
                     onSettingsChange = viewModel::updateSettings,
+                    onImportProfiles = viewModel::importProfiles,
+                    onRefreshSubscriptions = { viewModel.refreshSubscriptions() },
                 )
             }
         }

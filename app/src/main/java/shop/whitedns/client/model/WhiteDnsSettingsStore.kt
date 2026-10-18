@@ -346,6 +346,7 @@ class WhiteDnsSettingsStore(
                         item.optJSONObject("cottenSettings"),
                     ),
                     soarSettings = soarProfileSettingsFromJson(item.optJSONObject("soarSettings")),
+                    subscription = SubscriptionSource.fromJson(item.optJSONObject("subscription")),
                 )
             }
                 .filter { it.id.isNotBlank() }
@@ -368,7 +369,8 @@ class WhiteDnsSettingsStore(
                     .put("connectionMode", profile.connectionMode)
                     .put("engine", DnsClientEngine.normalize(profile.engine))
                     .put("cottenSettings", profile.cottenSettings.toJson())
-                    .put("soarSettings", profile.soarSettings.toJson()),
+                    .put("soarSettings", profile.soarSettings.toJson())
+                    .put("subscription", profile.subscription?.toJson()),
             )
         }
         return array.toString()
