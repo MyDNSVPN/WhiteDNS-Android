@@ -1,6 +1,9 @@
 # Soar setup and network selection
 
-WhiteDNS 1.6.6 adds Lantern Soar v0.2.2 alongside StormDNS and CottenDNS.
+WhiteDNS 1.6.6 introduced Lantern Soar v0.2.2 alongside StormDNS and CottenDNS.
+The current stable release, WhiteDNS 1.6.7, uses the attributed Soar v0.2.3 source
+with the WhiteDNS transport fixes described below. Server panel 0.2.0 is available
+from the [guided panel installer](https://github.com/WhiteDNS/Soar-Server).
 Soar requires its own server and public key; Master/Cotten server settings
 cannot be reused for this engine.
 
@@ -52,7 +55,7 @@ and network switching still need field verification. No country-wide
 availability guarantee is made.
 
 
-## Browser reliability update (1.6.7-beta2)
+## Browser reliability update (1.6.7)
 
 The original connectivity probe only establishes that a small HTTPS request can
 cross the tunnel. It does not qualify concurrent browser handshakes or complete

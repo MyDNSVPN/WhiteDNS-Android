@@ -175,9 +175,9 @@ jobs:
             printf 'Official WhiteDNS release %s. See README and THIRD_PARTY_NOTICES.md.\n' "$TAG_NAME" > "$NOTES_FILE"
           fi
 
-          release_flags=()
+          release_flags=(--latest=true)
           if [[ "${TAG_NAME}" =~ (alpha|beta|rc) ]]; then
-            release_flags+=(--prerelease)
+            release_flags=(--prerelease --latest=false)
           fi
 
           if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
