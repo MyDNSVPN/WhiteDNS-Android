@@ -6,8 +6,10 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.UUID
 import kotlin.concurrent.thread
+import shop.whitedns.client.model.ConnectionProfile
 import shop.whitedns.client.model.CottenDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsSettings
+import shop.whitedns.client.phantomdns.PhantomDnsConfigRenderer
 
 data class CottenDnsLaunchSpec(
     val binaryFile: File,
@@ -34,16 +36,29 @@ class CottenDnsProcessManager(
             mkdirs()
         }
         cleanupStaleLaunchFiles(runtimeDir)
-        val binaryFile = binaryInstaller.installExecutable()
+        // The launch mechanics (exec a native binary with -config/-resolvers,
+        // drain stdout) are identical across engines; only the binary and the
+        // config dialect differ, so route those two by the selected engine and
+        // keep everything else shared. CottenDns is the default and unchanged.
+        val isPhantom = ConnectionProfile.normalizeEngine(settings.engine) ==
+            ConnectionProfile.EnginePhantomDns
+        val binaryFile = binaryInstaller.installExecutable(
+            if (isPhantom) {
+                CottenDnsBinaryInstaller.PhantomDnsLibraryName
+            } else {
+                CottenDnsBinaryInstaller.CottenDnsLibraryName
+            },
+        )
         val launchId = UUID.randomUUID().toString()
         val configFile = File(runtimeDir, ".wd-$launchId.toml")
         val resolversFile = File(runtimeDir, ".wd-$launchId.resolvers")
 
         configFile.writeText(
-            CottenDnsConfigRenderer.renderClientToml(
-                serverProfile = serverProfile,
-                settings = settings,
-            ),
+            if (isPhantom) {
+                PhantomDnsConfigRenderer.renderClientToml(serverProfile, settings)
+            } else {
+                CottenDnsConfigRenderer.renderClientToml(serverProfile, settings)
+            },
         )
         resolversFile.writeText(CottenDnsConfigRenderer.renderResolvers(settings))
 

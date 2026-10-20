@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"cottendns-go/internal/config"
+	"cottendns-go/internal/cottenmax"
 	dnsCache "cottendns-go/internal/dnscache"
 	domainMatcher "cottendns-go/internal/domainmatcher"
 	fragmentStore "cottendns-go/internal/fragmentstore"
@@ -36,13 +37,15 @@ const (
 	mtuProbeMetaLength  = mtuProbeCodeLength + 2
 	mtuProbeUpMinSize   = 1 + mtuProbeCodeLength
 	mtuProbeDownMinSize = mtuProbeUpMinSize + 2
-	mtuProbeMinDownSize = 30
+	mtuProbeMinDownSize = VpnProto.MinMTUDownloadProbePayload
 	mtuProbeMaxDownSize = 4096
 )
 
 var preSessionPacketTypes = buildPreSessionPacketTypes()
 
 type Server struct {
+	cottenMax                *cottenmax.Server
+	cottenMaxSecret          string
 	cfg                      config.ServerConfig
 	log                      *logger.Logger
 	codec                    *security.Codec
@@ -51,6 +54,8 @@ type Server struct {
 	codecAccepted            [6]atomic.Uint64   // successful ingress frames by encryption method
 	ingressReplay            ingressReplayCache // authenticated requests already dispatched
 	domainMatcher            *domainMatcher.Matcher
+	advertisedDomains        []string // ADVERTISE_DOMAINS ∩ DOMAIN, see domain_rotation.go
+	zoneNS                   []string // ZONE_NS outside our zones, see server_utils.go
 	sessions                 *sessionStore
 	deferredDNSSession       *deferredSessionProcessor
 	deferredConnectSession   *deferredSessionProcessor
@@ -361,6 +366,8 @@ func New(cfg config.ServerConfig, log *logger.Logger, codec *security.Codec) *Se
 		codec:                  codec,
 		codecs:                 []*security.Codec{codec}, // single-codec until SetCodecSet enables auto-detect
 		domainMatcher:          domainMatcher.New(cfg.Domain, cfg.MinVPNLabelLength),
+		advertisedDomains:      servedAdvertisedDomains(cfg.Domain, cfg.AdvertiseDomains),
+		zoneNS:                 outOfZoneNameservers(cfg.Domain, cfg.ZoneNS),
 		sessions:               newSessionStore(cfg.SessionOrphanQueueInitialCap, cfg.StreamQueueInitialCapacity, cfg.SessionInitReuseTTL(), cfg.RecentlyClosedStreamTTL(), cfg.RecentlyClosedStreamCap, cfg.MaxStreamsPerSession, cfg.MaxActiveSessions),
 		deferredDNSSession:     newDeferredSessionProcessor(dnsDeferredWorkers, dnsDeferredQueue, log),
 		deferredConnectSession: newDeferredSessionProcessor(connectDeferredWorkers, connectDeferredQueue, log),
@@ -570,6 +577,21 @@ func splitDeferredSessionPools(totalWorkers int, totalQueue int) (dnsWorkers int
 func (s *Server) Run(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if s.cfg.TunnelMode == config.TunnelCottenMax || s.cottenMaxSecret != "" {
+		if err := s.startCottenMax(runCtx); err != nil {
+			return err
+		}
+		if s.cottenMax != nil {
+			defer s.cottenMax.Close()
+			go func() {
+				select {
+				case <-s.cottenMax.Done():
+					cancel()
+				case <-runCtx.Done():
+				}
+			}()
+		}
+	}
 
 	listenAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(s.cfg.UDPHost, strconv.Itoa(s.cfg.UDPPort)))
 	if err != nil {
@@ -708,6 +730,11 @@ func (s *Server) Run(ctx context.Context) error {
 	cancel()
 	tcpWG.Wait()
 	<-cleanupDone
+	if s.cottenMax != nil {
+		if err := s.cottenMax.Err(); err != nil {
+			return fmt.Errorf("cottenmax stopped: %w", err)
+		}
+	}
 
 	if ctx.Err() != nil {
 		return ctx.Err()

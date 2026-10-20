@@ -1,0 +1,12 @@
+WhiteDNS shared scanner Android source snapshot
+
+Source: https://github.com/TaJirax/whitedns-scanner
+The engine/ and mobile/ packages and their embedded ASN CSV files are copied
+without changes from the local working tree recorded in SCANNER_SOURCE.json.
+The source repository does not contain a standalone license declaration; no
+additional license grant is asserted by this vendor snapshot.
+
+The embedded filtered_ipv4.csv / filtered_ipv6.csv tables are retained byte for
+byte. The upstream engine/asn.go attributes their source to cleanip-finder.
+The Go golang.org/x package licenses used by the scanner/mobile build are
+retained alongside this notice. Dependency versions remain in go.mod/go.sum.

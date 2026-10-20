@@ -127,6 +127,17 @@ func (c *Client) exchangeUDPQueryWithConn(conn *net.UDPConn, packet []byte, time
 		}
 
 		if n >= 2 && binary.BigEndian.Uint16(buffer[:2]) == expectedID {
+			// A forged NXDOMAIN raced in by an on-path censor would end this
+			// exchange (MTU probe, session init, recheck) before the real answer
+			// lands and drop a working resolver. Skip it as the live tunnel does
+			// (RESOLVER_IGNORE_INJECTED_NXDOMAIN); the deadline still catches a
+			// path that is really dead. Opt-in (..._IN_PROBES): when the real
+			// answer never comes, each skip costs a full probe timeout.
+			if n >= 4 && c.cfg.ResolverIgnoreInjectedNXDOMAINInProbes && c.rcodeIsInjectedNoise(buffer[3]&0x0F) {
+				addr, _ := conn.RemoteAddr().(*net.UDPAddr)
+				c.noteInjectedResolverNoise(addr)
+				continue
+			}
 			// Copy matched response out so the pooled buffer can be recycled.
 			result := make([]byte, n)
 			copy(result, buffer[:n])
@@ -141,12 +152,17 @@ func (c *Client) exchangeUDPQueryWithConn(conn *net.UDPConn, packet []byte, time
 }
 
 func (c *Client) sendOneWayDNSQuery(resolver Connection, packet []byte, deadline time.Time) error {
+	limitCtx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+	if !c.queryLimiter.wait(limitCtx, resolver.Resolver, resolver.Domain) {
+		return limitCtx.Err()
+	}
 	if c.usesStreamTransport() {
 		// Best-effort one-shot over the active stream transport (e.g. the
 		// session-close burst). DoH has no one-way form, so it reuses the normal
 		// request/response exchanger and discards the answer.
-		if c.activeTransport() == transportDoH {
-			transport, err := c.newDoHQueryTransport(resolver.ResolverLabel)
+		if c.activeTransport() == transportDoH || c.activeTransport() == transportDoH3 || c.activeTransport() == transportDoQ {
+			transport, err := c.newEncryptedQueryTransport(resolver.ResolverLabel)
 			if err != nil {
 				return err
 			}
@@ -338,6 +354,7 @@ func (t *udpQueryTransport) Close() error {
 // packet, over the client's active transport (UDP, or DNS-over-TCP in TCP mode).
 func (c *Client) exchangeDNSOverConnection(conn Connection, query []byte, timeout time.Duration) (VpnProto.Packet, error) {
 	var response []byte
+	c.queryLimiter.wait(context.Background(), conn.Resolver, conn.Domain)
 
 	if c.usesStreamTransport() {
 		transport, err := c.newQueryTransport(conn.ResolverLabel)
@@ -375,6 +392,9 @@ func (c *Client) exchangeDNSOverConnection(conn Connection, query []byte, timeou
 // exchanges immediately instead of keeping sockets and HTTP streams alive until
 // their full timeout.
 func (c *Client) exchangeDNSOverConnectionContext(ctx context.Context, conn Connection, query []byte, timeout time.Duration) (VpnProto.Packet, error) {
+	if !c.queryLimiter.wait(ctx, conn.Resolver, conn.Domain) {
+		return VpnProto.Packet{}, ctx.Err()
+	}
 	transport, err := c.newQueryTransport(conn.ResolverLabel)
 	if err != nil {
 		return VpnProto.Packet{}, err

@@ -1,0 +1,126 @@
+package shop.whitedns.client.model
+
+import java.io.Serializable
+import org.json.JSONObject
+
+// Optional settings belong to the existing CottenDNS connection. They never
+// introduce another engine, domain registration, credential or launch config.
+data class CottenMaxOptions(
+    val standbyDomains: String = "",
+    val failoverAfterMs: Int = 3000,
+    val safeQName: Int = 101,
+    val maxQName: Int = 253,
+    val maxAnswer: Int = 1232,
+    val maxPathWindow: Int = 256,
+    val maxInflight: Int = 256,
+    val sessionIdleMs: Int = 90000,
+    val holdMs: Int = 500,
+    val discoveryEnabled: Boolean = false,
+    val discoveryCountry: String = "",
+    val discoverySampleRanges: Int = 0,
+    val discoveryCacheEnabled: Boolean = false,
+    val discoveryNetworkId: String = "",
+    val discoveryCandidates: String = "",
+    val discoveryWant: Int = 16,
+    val discoveryConcurrency: Int = 16,
+    val discoveryPaceMs: Int = 20,
+    val dnsPaddingBlockSize: Int = 0,
+    val labelCountJitter: Boolean = false,
+    val qnameLossGuard: Boolean = false,
+    val doh3FallbackToDoh: Boolean = false,
+) : Serializable {
+    fun normalized(): CottenMaxOptions = copy(
+        standbyDomains = entries(standbyDomains).map { it.trimEnd('.').lowercase() }.distinct().take(7).joinToString(", "),
+        failoverAfterMs = failoverAfterMs.coerceIn(100, 60000),
+        safeQName = safeQName.coerceIn(64, 253),
+        maxQName = maxQName.coerceIn(safeQName.coerceIn(64, 253), 253),
+        maxAnswer = maxAnswer.coerceIn(512, 1232),
+        maxPathWindow = maxPathWindow.coerceIn(1, 1024),
+        maxInflight = maxInflight.coerceIn(1, 1024),
+        sessionIdleMs = sessionIdleMs.coerceIn(1000, 90000),
+        holdMs = holdMs.coerceIn(0, 1500) / 100 * 100,
+        discoveryCountry = discoveryCountry.trim().lowercase().takeIf { it.matches(Regex("[a-z]{2}")) }.orEmpty(),
+        discoverySampleRanges = discoverySampleRanges.coerceIn(0, 4096),
+        discoveryNetworkId = discoveryNetworkId.take(256),
+        discoveryCandidates = entries(discoveryCandidates).take(256).joinToString(", "),
+        discoveryWant = discoveryWant.coerceIn(1, 64),
+        discoveryConcurrency = discoveryConcurrency.coerceIn(1, 64),
+        discoveryPaceMs = discoveryPaceMs.coerceIn(1, 60000),
+        dnsPaddingBlockSize = if (dnsPaddingBlockSize <= 0) 0 else dnsPaddingBlockSize.coerceIn(16, 4096),
+    )
+
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("standbyDomains", standbyDomains)
+        put("failoverAfterMs", failoverAfterMs)
+        put("safeQName", safeQName)
+        put("maxQName", maxQName)
+        put("maxAnswer", maxAnswer)
+        put("maxPathWindow", maxPathWindow)
+        put("maxInflight", maxInflight)
+        put("sessionIdleMs", sessionIdleMs)
+        put("holdMs", holdMs)
+        put("discoveryEnabled", discoveryEnabled)
+        put("discoveryCountry", discoveryCountry)
+        put("discoverySampleRanges", discoverySampleRanges)
+        put("discoveryCacheEnabled", discoveryCacheEnabled)
+        put("discoveryNetworkId", discoveryNetworkId)
+        put("discoveryCandidates", discoveryCandidates)
+        put("discoveryWant", discoveryWant)
+        put("discoveryConcurrency", discoveryConcurrency)
+        put("discoveryPaceMs", discoveryPaceMs)
+        put("dnsPaddingBlockSize", dnsPaddingBlockSize)
+        put("labelCountJitter", labelCountJitter)
+        put("qnameLossGuard", qnameLossGuard)
+        put("doh3FallbackToDoh", doh3FallbackToDoh)
+    }
+
+    companion object {
+        fun entries(text: String): List<String> = text.split(Regex("[,;\\s]+"))
+            .map(String::trim).filter(String::isNotEmpty).distinct()
+
+        fun fromJson(json: JSONObject?): CottenMaxOptions {
+            if (json == null) return CottenMaxOptions()
+            val defaults = CottenMaxOptions()
+            return CottenMaxOptions(
+                standbyDomains = json.optString("standbyDomains"),
+                failoverAfterMs = json.optInt("failoverAfterMs", defaults.failoverAfterMs),
+                safeQName = json.optInt("safeQName", defaults.safeQName),
+                maxQName = json.optInt("maxQName", defaults.maxQName),
+                maxAnswer = json.optInt("maxAnswer", defaults.maxAnswer),
+                maxPathWindow = json.optInt("maxPathWindow", defaults.maxPathWindow),
+                maxInflight = json.optInt("maxInflight", defaults.maxInflight),
+                sessionIdleMs = json.optInt("sessionIdleMs", defaults.sessionIdleMs),
+                holdMs = json.optInt("holdMs", defaults.holdMs),
+                discoveryEnabled = json.optBoolean("discoveryEnabled", defaults.discoveryEnabled),
+                discoveryCountry = json.optString("discoveryCountry"),
+                discoverySampleRanges = json.optInt("discoverySampleRanges", defaults.discoverySampleRanges),
+                discoveryCacheEnabled = json.optBoolean("discoveryCacheEnabled", defaults.discoveryCacheEnabled),
+                discoveryNetworkId = json.optString("discoveryNetworkId"),
+                discoveryCandidates = json.optString("discoveryCandidates"),
+                discoveryWant = json.optInt("discoveryWant", defaults.discoveryWant),
+                discoveryConcurrency = json.optInt("discoveryConcurrency", defaults.discoveryConcurrency),
+                discoveryPaceMs = json.optInt("discoveryPaceMs", defaults.discoveryPaceMs),
+                dnsPaddingBlockSize = json.optInt("dnsPaddingBlockSize", defaults.dnsPaddingBlockSize),
+                labelCountJitter = json.optBoolean("labelCountJitter", defaults.labelCountJitter),
+                qnameLossGuard = json.optBoolean("qnameLossGuard", defaults.qnameLossGuard),
+                doh3FallbackToDoh = json.optBoolean("doh3FallbackToDoh", defaults.doh3FallbackToDoh),
+            ).normalized()
+        }
+    }
+}
+
+
+fun WhiteDnsSettings.canBootstrapResolversWithCottenMax(): Boolean {
+    val profile = selectedConnectionProfile()
+    return resolverText.isBlank() &&
+        ConnectionProfile.normalizeEngine(profile.engine) == ConnectionProfile.EngineCottenDns &&
+        ConnectionProfile.normalizeServerType(profile.serverType) == ConnectionProfile.ServerTypeCottenDns &&
+        ConnectionProfile.normalizeTunnelMode(profile.tunnelMode) == "cottenmax" && profile.cottenMaxOptions.discoveryEnabled
+}
+
+// Runtime settings restore global fields separately from the authenticated
+// server profile; use that profile's persisted mode/options at the service gate.
+fun CottenDnsServerProfile.canBootstrapResolversWithCottenMax(settings: WhiteDnsSettings): Boolean =
+    settings.resolverText.isBlank() && ConnectionProfile.normalizeEngine(settings.engine) == ConnectionProfile.EngineCottenDns &&
+        ConnectionProfile.normalizeServerType(serverType) == ConnectionProfile.ServerTypeCottenDns &&
+        ConnectionProfile.normalizeTunnelMode(tunnelMode) == "cottenmax" && cottenMaxOptions.discoveryEnabled

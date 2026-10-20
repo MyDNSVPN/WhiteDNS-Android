@@ -1,2 +1,4 @@
-repository=https://github.com/TaJirax/cottenDNS
-commit=cdf084f528c5833eeb77f1b9a29ecf0ceae89f86
+repository=https://github.com/WhiteDNS/CottenDNS
+base_commit=48d6c81d45edd85aaf3b4a88f8ebc06c22b88574
+commit=409aafde08e115aa396690559152bcc7c0785567
+source_snapshot=third_party/CottenDns/COTTEN_CORE_SNAPSHOT.json

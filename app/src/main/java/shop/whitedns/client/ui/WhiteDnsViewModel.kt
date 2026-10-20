@@ -55,6 +55,7 @@ import shop.whitedns.client.model.WhiteDnsScanState
 import shop.whitedns.client.model.WhiteDnsScanStatus
 import shop.whitedns.client.model.WhiteDnsRuntimeProxy
 import shop.whitedns.client.model.WhiteDnsSettings
+import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
 import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.WhiteDnsUiState
 import shop.whitedns.client.model.WhiteDnsAutoTunePresets
@@ -368,7 +369,7 @@ class WhiteDnsViewModel(
             }
             val settings = uiState.settings.syncSelectedConnectionProfileFields()
             appendLog(connectionContextSummary(settings))
-            if (settings.resolve().resolverEntries.isEmpty()) {
+            if (settings.resolve().resolverEntries.isEmpty() && !settings.canBootstrapResolversWithCottenMax()) {
                 appendLog("Resolvers are required to connect (validResolvers=0)")
                 activeRuntimeSessionId = ""
                 uiState = uiState.copy(
@@ -2545,6 +2546,8 @@ class WhiteDnsViewModel(
             encryptionKey = encryptionKey,
             encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
             serverType = ConnectionProfile.normalizeServerType(connectionProfile.serverType),
+            tunnelMode = ConnectionProfile.normalizeTunnelMode(connectionProfile.tunnelMode),
+            cottenMaxOptions = connectionProfile.cottenMaxOptions,
         )
     }
 

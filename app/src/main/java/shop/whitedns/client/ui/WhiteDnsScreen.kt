@@ -1,5 +1,11 @@
 package shop.whitedns.client.ui
 
+import shop.whitedns.client.scanner.ScannerHub
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -129,6 +135,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
@@ -171,6 +178,7 @@ import shop.whitedns.client.model.WhiteDnsScanDefaults
 import shop.whitedns.client.model.WhiteDnsScanState
 import shop.whitedns.client.model.WhiteDnsScanStatus
 import shop.whitedns.client.model.WhiteDnsSettings
+import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
 import shop.whitedns.client.model.WhiteDnsUiState
 import shop.whitedns.client.model.applyAdvancedProfile
 import shop.whitedns.client.model.applyAutoTunePreset
@@ -246,8 +254,19 @@ fun WhiteDnsScreen(
     var selectedTab by rememberSaveable { mutableStateOf(WhiteDnsTab.CONNECT) }
     var profileCreateRequest by rememberSaveable { mutableStateOf<ProfileCreateRequest?>(null) }
 
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val expanded = maxWidth >= 600.dp
+    Row(Modifier.fillMaxSize()) {
+    if (expanded) {
+        NavigationRail(Modifier.statusBarsPadding().navigationBarsPadding()) {
+            WhiteDnsTab.entries.forEach { tab ->
+                NavigationRailItem(selectedTab == tab, { selectedTab = tab }, icon = { Icon(tab.icon, null) }, label = { Text(tabLabel(tab)) })
+            }
+        }
+    }
     Column(
         modifier = Modifier
+            .weight(1f)
             .fillMaxSize()
             .whiteDnsPageBackground(),
     ) {
@@ -277,7 +296,7 @@ fun WhiteDnsScreen(
                     },
                     onSettingsChange = onSettingsChange,
                 )
-                WhiteDnsTab.SCAN -> ScanTabContent(
+                WhiteDnsTab.SCAN -> ScannerHub(uiState.settings, onSettingsChange) { ScanTabContent(
                     uiState = uiState,
                     onScanFileSelected = onScanFileSelected,
                     onScanDefaultListSelected = onScanDefaultListSelected,
@@ -288,18 +307,22 @@ fun WhiteDnsScreen(
                     onScanResumeClick = onScanResumeClick,
                     onSettingsChange = onSettingsChange,
                 )
+                }
                 WhiteDnsTab.LOGS -> LogsTabContent(
                     uiState = uiState,
                     onSettingsChange = onSettingsChange,
                 )
             }
         }
-        BottomNavigationBar(
+        if (!expanded) BottomNavigationBar(
             selectedTab = selectedTab,
             onTabSelected = { selectedTab = it },
         )
     }
 }
+    }
+    }
+
 
 private enum class WhiteDnsTab(
     val label: String,
@@ -332,25 +355,7 @@ private enum class ProfileCreateRequest {
 }
 
 @Composable
-private fun Modifier.whiteDnsPageBackground(): Modifier {
-    val backgroundColor = WhiteDnsPalette.Background
-    val accentColor = WhiteDnsPalette.Accent
-    return drawBehind {
-        drawRect(color = backgroundColor)
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    accentColor.copy(alpha = 0.30f),
-                    Color(0xFF245D72).copy(alpha = 0.17f),
-                    Color(0xFF111420).copy(alpha = 0.08f),
-                    Color.Transparent,
-                ),
-                center = Offset(x = size.width, y = 0f),
-                radius = size.maxDimension * 1.08f,
-            ),
-        )
-    }
-}
+private fun Modifier.whiteDnsPageBackground(): Modifier = background(WhiteDnsPalette.Background)
 
 @Composable
 private fun ConnectTabContent(
@@ -463,7 +468,7 @@ private fun ConnectTabContent(
     } else {
         notSelectedStr
     }
-    val hasResolvers = resolverValidation.isValid
+    val hasResolvers = resolverValidation.isValid || uiState.settings.canBootstrapResolversWithCottenMax()
     val proxyIpAddress = displayProxyIpAddress(
         listenIp = resolvedSettings.listenIp,
         networkIpAddress = uiState.networkIpAddress,
@@ -770,7 +775,7 @@ private fun ConnectTabContent(
                             Text(
                                 text = "Saved immediately and used on the next connection.",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = 10.sp,
+                                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                                     color = WhiteDnsPalette.Muted,
                                 ),
                             )
@@ -810,7 +815,7 @@ private fun ConnectTabContent(
                     modifier = Modifier.padding(top = 10.dp),
                     text = WhiteDnsL10n.connectNeedResolvers,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 11.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = WhiteDnsPalette.WarningText,
                         fontWeight = FontWeight.Medium,
                     ),
@@ -1096,6 +1101,7 @@ private fun ParallelTestSelectionPanel(
     onExpandedChange: (Boolean) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
     val arrowRotation by animateFloatAsState(
@@ -1155,9 +1161,9 @@ private fun ParallelTestSelectionPanel(
                 .clip(RoundedCornerShape(10.dp))
                 .semantics {
                     contentDescription = if (expanded) {
-                        context.getString(R.string.cd_parallel_test_collapse)
+                        accessibilityResources.getString(R.string.cd_parallel_test_collapse)
                     } else {
-                        context.getString(R.string.cd_parallel_test_expand)
+                        accessibilityResources.getString(R.string.cd_parallel_test_expand)
                     }
                 }
                 .clickable(role = Role.Button) {
@@ -1171,7 +1177,7 @@ private fun ParallelTestSelectionPanel(
             Text(
                 text = "${WhiteDnsL10n.connectSelectedCount} ${selectedIds.size}/${WhiteDnsParallelTest.MaxSelectedConfigs}",
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.FieldLabel,
                     fontWeight = FontWeight.SemiBold,
                 ),
@@ -1187,7 +1193,7 @@ private fun ParallelTestSelectionPanel(
                 Text(
                     text = if (expanded) WhiteDnsL10n.parallelTestOpenLabel else WhiteDnsL10n.parallelTestClosedLabel,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 9.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = if (expanded) WhiteDnsPalette.OnAccent else WhiteDnsPalette.Muted,
                         fontWeight = FontWeight.Medium,
                         letterSpacing = 0.8.sp,
@@ -1219,7 +1225,7 @@ private fun ParallelTestSelectionPanel(
                 Text(
                     text = WhiteDnsL10n.parallelTestDescription,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 11.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = WhiteDnsPalette.Muted,
                         lineHeight = 16.sp,
                     ),
@@ -1269,7 +1275,7 @@ private fun ParallelTestSelectionPanel(
                         modifier = Modifier.padding(top = WhiteDnsSpacing.xs),
                         text = WhiteDnsL10n.parallelTestYourConfigs,
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             color = WhiteDnsPalette.FieldLabel,
                             fontWeight = FontWeight.SemiBold,
                         ),
@@ -1356,7 +1362,7 @@ private fun ParallelTestConfigRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.Muted.copy(alpha = contentAlpha),
                     lineHeight = 14.sp,
                 ),
@@ -1559,7 +1565,7 @@ private fun SettingProfileGuideDialog(
             Text(
                 text = WhiteDnsL10n.settingGuideIntro,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 11.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     lineHeight = 16.sp,
                     color = WhiteDnsPalette.Description,
                 ),
@@ -1568,7 +1574,7 @@ private fun SettingProfileGuideDialog(
             Text(
                 text = WhiteDnsL10n.settingGuideSource,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 9.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     lineHeight = 13.sp,
                     color = WhiteDnsPalette.Pale,
                 ),
@@ -1628,7 +1634,7 @@ private fun SettingsGuideEntryView(
         Text(
             text = entry.title,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 11.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 lineHeight = 15.sp,
                 color = WhiteDnsPalette.Ink,
                 fontWeight = FontWeight.Bold,
@@ -1638,7 +1644,7 @@ private fun SettingsGuideEntryView(
         Text(
             text = entry.body,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 lineHeight = 15.sp,
                 color = WhiteDnsPalette.Description,
             ),
@@ -1647,7 +1653,7 @@ private fun SettingsGuideEntryView(
         Text(
             text = "${WhiteDnsL10n.settingGuideEffectLabel}: ${entry.effect}",
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 lineHeight = 15.sp,
                 color = WhiteDnsPalette.AccentText,
                 fontWeight = FontWeight.Medium,
@@ -1993,7 +1999,7 @@ private fun ScanInfoNotice(
             Text(
                 text = WhiteDnsL10n.scanAutoSaveTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 9.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.AccentText,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.9.sp,
@@ -2003,7 +2009,7 @@ private fun ScanInfoNotice(
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     lineHeight = 14.sp,
                     color = WhiteDnsPalette.AccentText,
                     fontWeight = FontWeight.Medium,
@@ -2065,7 +2071,7 @@ private fun ScanSaveAsProfileDialog(
             Text(
                 text = "$resolverCount · $scanLabel · $saveBodyTemplate",
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 11.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     lineHeight = 16.sp,
                     color = WhiteDnsPalette.Muted,
                 ),
@@ -2112,6 +2118,7 @@ private fun ScanWorkerSlider(
     enabled: Boolean,
     onWorkerCountChange: (Int) -> Unit,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -2138,7 +2145,7 @@ private fun ScanWorkerSlider(
             valueRange = ScanWorkerMin.toFloat()..ScanWorkerMax.toFloat(),
             steps = ScanWorkerMax - ScanWorkerMin - 1,
             modifier = Modifier.semantics {
-                contentDescription = context.getString(R.string.cd_worker_count_slider, workerCount)
+                contentDescription = accessibilityResources.getString(R.string.cd_worker_count_slider, workerCount)
             },
             colors = SliderDefaults.colors(
                 thumbColor = WhiteDnsPalette.Accent,
@@ -2160,6 +2167,7 @@ private fun MtuParallelismSlider(
     label: String = WhiteDnsL10n.settingResolverParallel,
     note: String = WhiteDnsL10n.settingResolverParallelNote,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     var sliderValue by remember(parallelism) { mutableStateOf(parallelism.toMtuParallelismSliderValue().toFloat()) }
     val displayedParallelism = sliderValue.toMtuParallelismSliderValue()
@@ -2194,7 +2202,7 @@ private fun MtuParallelismSlider(
             valueRange = MtuParallelismMin.toFloat()..MtuParallelismMax.toFloat(),
             steps = ((MtuParallelismMax - MtuParallelismMin) / MtuParallelismStep) - 1,
             modifier = Modifier.semantics {
-                contentDescription = context.getString(R.string.cd_mtu_parallelism_slider, displayedParallelism)
+                contentDescription = accessibilityResources.getString(R.string.cd_mtu_parallelism_slider, displayedParallelism)
             },
             colors = SliderDefaults.colors(
                 thumbColor = WhiteDnsPalette.Accent,
@@ -2208,7 +2216,7 @@ private fun MtuParallelismSlider(
         Text(
             text = note,
             style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 11.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 lineHeight = 16.sp,
                 color = WhiteDnsPalette.Muted,
             ),
@@ -2322,69 +2330,14 @@ private fun BottomNavigationBar(
     selectedTab: WhiteDnsTab,
     onTabSelected: (WhiteDnsTab) -> Unit,
 ) {
-    val haptic = rememberHapticFeedback()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(WhiteDnsPalette.SurfaceAlt)
-            .navigationBarsPadding(),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.5.dp, WhiteDnsPalette.Border)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            WhiteDnsTab.entries.forEach { tab ->
-                val selected = selectedTab == tab
-                val localizedLabel = tabLabel(tab)
-                val background by animateColorAsState(
-                    targetValue = if (selected) WhiteDnsPalette.AccentSurface else Color.Transparent,
-                    animationSpec = tween(180),
-                    label = "bottomNavBackground",
-                )
-                val color by animateColorAsState(
-                    targetValue = if (selected) WhiteDnsPalette.AccentText else WhiteDnsPalette.Disabled,
-                    animationSpec = tween(180),
-                    label = "bottomNavColor",
-                )
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(background)
-                        .selectable(
-                            selected = selected,
-                            role = Role.Tab,
-                            onClick = {
-                                haptic.performLight()
-                                onTabSelected(tab)
-                            },
-                        )
-                        .semantics(mergeDescendants = true) {}
-                        .padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(
-                        imageVector = tab.icon,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        text = localizedLabel,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 9.sp,
-                            color = color,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            letterSpacing = 0.5.sp,
-                        ),
-                    )
-                }
-            }
+    NavigationBar(containerColor = WhiteDnsPalette.SurfaceAlt) {
+        WhiteDnsTab.entries.forEach { tab ->
+            NavigationBarItem(
+                selected = selectedTab == tab,
+                onClick = { onTabSelected(tab) },
+                icon = { Icon(tab.icon, contentDescription = null) },
+                label = { Text(tabLabel(tab)) },
+            )
         }
     }
 }
@@ -2436,7 +2389,7 @@ private fun ProfileTabSwitch(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 9.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = if (selected) WhiteDnsPalette.OnAccent else WhiteDnsPalette.Muted,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         letterSpacing = 0.4.sp,
@@ -2449,6 +2402,7 @@ private fun ProfileTabSwitch(
 
 @Composable
 private fun FooterLink() {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
@@ -2456,7 +2410,7 @@ private fun FooterLink() {
         Text(
             text = WhiteDnsL10n.footerPoweredBy,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.Description,
             ),
         )
@@ -2466,7 +2420,7 @@ private fun FooterLink() {
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
                 .semantics {
-                    contentDescription = context.getString(R.string.cd_telegram_link)
+                    contentDescription = accessibilityResources.getString(R.string.cd_telegram_link)
                 }
                 .clickable(role = Role.Button) {
                     haptic.performLight()
@@ -2474,7 +2428,7 @@ private fun FooterLink() {
                 }
                 .padding(horizontal = 8.dp, vertical = 3.dp),
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 9.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.AccentText,
             ),
         )
@@ -2549,7 +2503,7 @@ private fun ConnectionModeSegmentedControl(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 10.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             color = textColor,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                             letterSpacing = 0.4.sp,
@@ -2619,7 +2573,7 @@ private fun ThemeModeSegmentedControl(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 10.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             color = textColor,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                             letterSpacing = 0.4.sp,
@@ -2701,7 +2655,7 @@ private fun HomeSelectorCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 10.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = detailColor,
                         fontWeight = FontWeight.Medium,
                     ),
@@ -2842,7 +2796,7 @@ private fun AdvancedSettingsImportDialog(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 10.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = WhiteDnsPalette.Error,
                     ),
                 )
@@ -3223,7 +3177,7 @@ private fun HomeSelectorSheet(
                         Text(
                             text = emptyMessage,
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 11.sp,
+                                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                                 color = WhiteDnsPalette.Muted,
                             ),
                         )
@@ -3248,6 +3202,7 @@ private fun HomeSelectorSheetRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
@@ -3262,7 +3217,7 @@ private fun HomeSelectorSheetRow(
                 RoundedCornerShape(12.dp),
             )
             .semantics {
-                contentDescription = context.getString(R.string.cd_select_profile_item, item.title)
+                contentDescription = accessibilityResources.getString(R.string.cd_select_profile_item, item.title)
             }
             .clickable(role = Role.Button) {
                 haptic.performLight()
@@ -3289,7 +3244,7 @@ private fun HomeSelectorSheetRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = if (selected) WhiteDnsPalette.AccentText else WhiteDnsPalette.Muted,
                     fontWeight = FontWeight.Medium,
                 ),
@@ -3429,7 +3384,7 @@ private fun SetupInfoRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 9.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.Muted,
                     fontWeight = FontWeight.Bold,
                 ),
@@ -3451,7 +3406,7 @@ private fun SetupInfoRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = color,
                     fontWeight = FontWeight.Medium,
                 ),
@@ -3528,7 +3483,7 @@ private fun SetupActionButton(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = secondary,
                     fontWeight = FontWeight.Medium,
                 ),
@@ -3747,7 +3702,7 @@ private fun ConnectionProfilesSettings(
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = if (importNoticeIsError) WhiteDnsPalette.Error else WhiteDnsPalette.Success,
                 fontWeight = FontWeight.Medium,
             ),
@@ -3760,7 +3715,7 @@ private fun ConnectionProfilesSettings(
         Text(
             text = serverTestDisplayMessage(serverTestState),
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.Muted,
                 fontWeight = FontWeight.Medium,
             ),
@@ -3771,7 +3726,7 @@ private fun ConnectionProfilesSettings(
         Text(
             text = WhiteDnsL10n.customConnectionsEmpty,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.Muted,
             ),
         )
@@ -4064,7 +4019,7 @@ private fun ResolverProfilesSettings(
         Text(
             text = WhiteDnsL10n.profileNoResolverLists,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.Muted,
             ),
         )
@@ -4300,7 +4255,7 @@ private fun SettingProfilesSettings(
         Text(
             text = WhiteDnsL10n.profileNoSettingProfiles,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.Muted,
             ),
         )
@@ -4608,7 +4563,7 @@ private fun SettingProfileRow(
                 Text(
                     text = "${advancedProfileSummary(profile)}$summarySuffix",
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 10.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = when {
                             dirty -> WhiteDnsPalette.WarningText
                             selected -> WhiteDnsPalette.AccentText
@@ -4765,7 +4720,7 @@ private fun ResolverProfileDialog(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 10.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = WhiteDnsPalette.Error,
                     ),
                 )
@@ -4787,7 +4742,7 @@ private fun ResolverProfileDialog(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 10.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = if (validationMessageIsError) WhiteDnsPalette.Error else WhiteDnsPalette.Muted,
                     ),
                 )
@@ -4886,10 +4841,10 @@ private fun ResolverProfileRow(
                 Text(
                     text = resolverSummary,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 10.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = if (selected) WhiteDnsPalette.AccentText else WhiteDnsPalette.Muted,
                     ),
-                    maxLines = 1,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -4989,7 +4944,7 @@ private fun ConnectionProfileImportDialog(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 10.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = WhiteDnsPalette.Error,
                     ),
                 )
@@ -5110,7 +5065,7 @@ private fun ConnectionProfileExportDialog(
                 Text(
                     text = linkResult.exceptionOrNull()?.message ?: WhiteDnsL10n.errorExportProfile,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 11.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = WhiteDnsPalette.Error,
                     ),
                 )
@@ -5199,7 +5154,7 @@ private fun ResolverProfilesExportDialog(
                         Text(
                             text = WhiteDnsL10n.profileExportSavingFile,
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 11.sp,
+                                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                                 color = WhiteDnsPalette.Muted,
                             ),
                         )
@@ -5217,7 +5172,7 @@ private fun ResolverProfilesExportDialog(
                     Text(
                         text = exportState.errorMessage ?: WhiteDnsL10n.errorExportProfile,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 11.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             color = WhiteDnsPalette.Error,
                         ),
                     )
@@ -5245,7 +5200,7 @@ private fun ResolverProfilesExportDialog(
                     Text(
                         text = WhiteDnsL10n.profileExportSavedToTemplate.format(exportState.savedLocation),
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 10.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             color = WhiteDnsPalette.Muted,
                         ),
                     )
@@ -5302,7 +5257,7 @@ private fun ProfileQrPreview(link: String) {
             Text(
                 text = WhiteDnsL10n.profileQrUnavailable,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.Error,
                 ),
             )
@@ -5399,6 +5354,15 @@ private fun ConnectionProfileDialog(
     var serverType by remember(profile?.id) {
         mutableStateOf(ConnectionProfile.normalizeServerType(profile?.serverType))
     }
+    var engine by remember(profile?.id) {
+        mutableStateOf(ConnectionProfile.normalizeEngine(profile?.engine))
+    }
+    var tunnelMode by remember(profile?.id) {
+        mutableStateOf(ConnectionProfile.normalizeTunnelMode(profile?.tunnelMode))
+    }
+    val supportsMax = ConnectionProfile.normalizeEngine(engine) == ConnectionProfile.EngineCottenDns &&
+        ConnectionProfile.normalizeServerType(serverType) == ConnectionProfile.ServerTypeCottenDns
+    val usesMax = supportsMax && tunnelMode == "cottenmax"
     val canSave = name.isNotBlank() && domain.isNotBlank() && encryptionKey.isNotBlank()
 
     Dialog(onDismissRequest = onDismiss) {
@@ -5408,6 +5372,8 @@ private fun ConnectionProfileDialog(
                 .clip(RoundedCornerShape(22.dp))
                 .background(WhiteDnsPalette.Surface)
                 .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(22.dp))
+                .heightIn(max = 620.dp)
+                .verticalScroll(rememberScrollState())
                 .padding(18.dp),
         ) {
             Text(
@@ -5434,7 +5400,7 @@ private fun ConnectionProfileDialog(
             )
             Text(
                 text = "For multiple tunnel domains, separate them with commas (e.g. a.example.com, b.example.com).",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = WhiteDnsPalette.Muted),
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = MaterialTheme.typography.bodySmall.fontSize, color = WhiteDnsPalette.Muted),
                 modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
             )
             WhiteDnsTextField(
@@ -5444,25 +5410,56 @@ private fun ConnectionProfileDialog(
                 placeholder = WhiteDnsL10n.profileEncryptionKeyPlaceholder,
             )
             WhiteDnsDropdownField(
-                label = WhiteDnsL10n.profileFieldEncryptionMethod,
-                value = encryptionMethod,
-                options = localizedEncryptionMethods(),
-                onValueChange = { encryptionMethod = it },
+                label = "Engine",
+                value = engine,
+                options = localizedEngines(),
+                onValueChange = { engine = it },
             )
+            if (ConnectionProfile.normalizeEngine(engine) == ConnectionProfile.EnginePhantomDns) {
+                Text(
+                    text = "PhantomDns: a separate tunnel engine (github.com/DrAlanK/PhantomDNS) with its own wire protocol and config. Connects only to PhantomDNS servers. Live connection progress and traffic stats are limited with this engine; the tunnel and SOCKS/VPN proxy work normally. Server-type below is ignored.",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                        color = WhiteDnsPalette.Muted,
+                    ),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+            }
             WhiteDnsDropdownField(
                 label = WhiteDnsL10n.profileFieldServerType,
                 value = serverType,
                 options = localizedServerTypes(),
                 onValueChange = { serverType = it },
             )
+            if (supportsMax) {
+                WhiteDnsDropdownField(
+                    label = WhiteDnsL10n.cottenDnsModeLabel,
+                    value = tunnelMode,
+                    options = localizedCottenDnsModes(),
+                    onValueChange = { tunnelMode = it },
+                )
+                CottenDnsModeGuidance(usesMax)
+            }
+            if (!usesMax) {
+                WhiteDnsDropdownField(
+                    label = WhiteDnsL10n.profileFieldEncryptionMethod,
+                    value = encryptionMethod,
+                    options = localizedEncryptionMethods(),
+                    onValueChange = { encryptionMethod = it },
+                )
+            }
             Text(
-                text = if (ConnectionProfile.normalizeServerType(serverType) == ConnectionProfile.ServerTypeCottenDns) {
+                text = if (ConnectionProfile.normalizeEngine(engine) == ConnectionProfile.EnginePhantomDns) {
+                    "Server-type applies to CottenDns only and is ignored by PhantomDns."
+                } else if (usesMax) {
+                    WhiteDnsL10n.cottenMaxAdaptiveHint
+                } else if (ConnectionProfile.normalizeServerType(serverType) == ConnectionProfile.ServerTypeCottenDns) {
                     "CottenDns: 2-byte session IDs, TCP/53 fallback, rotated TXT/CNAME/NULL/HTTPS delivery, adaptive + domain-diverse duplication, and rate limiting."
                 } else {
                     "Storm / Master DNS: legacy 1-byte session IDs over TXT/UDP for older MasterDNS/StormDNS servers. QNAME reshaping is off for safety; DNS hardening still applies."
                 },
                 style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.Muted,
                 ),
                 modifier = Modifier.padding(top = 4.dp),
@@ -5494,6 +5491,9 @@ private fun ConnectionProfileDialog(
                                 customServerEncryptionKey = encryptionKey.trim(),
                                 customServerEncryptionMethod = encryptionMethod,
                                 serverType = serverType,
+                                engine = engine,
+                                tunnelMode = tunnelMode,
+                                cottenMaxOptions = profile?.cottenMaxOptions ?: shop.whitedns.client.model.CottenMaxOptions(),
                                 resolverProfileId = profile?.resolverProfileId.orEmpty(),
                                 connectionMode = profile?.connectionMode ?: "proxy",
                             ),
@@ -5559,10 +5559,15 @@ private fun ConnectionProfileRow(
     val domain = profile.customServerDomain.ifBlank { WhiteDnsL10n.profileDomainFallback }
     val activeStatus = WhiteDnsL10n.profileStatusActive
     val selectedStatus = WhiteDnsL10n.profileStatusSelected
+    val modeLabel = if (ConnectionProfile.normalizeEngine(profile.engine) == ConnectionProfile.EngineCottenDns &&
+        ConnectionProfile.normalizeServerType(profile.serverType) == ConnectionProfile.ServerTypeCottenDns) {
+        if (ConnectionProfile.normalizeTunnelMode(profile.tunnelMode) == "cottenmax") WhiteDnsL10n.cottenMaxBetaMode else WhiteDnsL10n.cottenDnsNormalMode
+    } else ""
+    val routeSummary = listOf(domain, modeLabel).filter { it.isNotBlank() }.joinToString(" · ")
     val connectionSummary = when {
-        active -> "$domain - $activeStatus"
-        selected -> "$domain - $selectedStatus"
-        else -> domain
+        active -> "$routeSummary - $activeStatus"
+        selected -> "$routeSummary - $selectedStatus"
+        else -> routeSummary
     }
     val displayName = if (profile.id == ConnectionProfile.DefaultId) WhiteDnsL10n.setupDefaultConnection else profile.name
     val testRating = serverTestResult?.let { result ->
@@ -5621,14 +5626,14 @@ private fun ConnectionProfileRow(
                 Text(
                     text = connectionSummary,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 10.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = when {
                             active -> WhiteDnsPalette.Success
                             selected -> WhiteDnsPalette.AccentText
                             else -> WhiteDnsPalette.Muted
                         },
                     ),
-                    maxLines = 1,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -5705,7 +5710,7 @@ private fun ServerTestInlineResult(rating: ServerTestRatingDisplay) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 9.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.Ink,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.8.sp,
@@ -5730,7 +5735,7 @@ private fun ServerTestInlineResult(rating: ServerTestRatingDisplay) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 8.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = rating.color,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.7.sp,
@@ -5866,7 +5871,7 @@ private fun DeleteProfileConfirmationDialog(
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 11.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     lineHeight = 16.sp,
                     color = WhiteDnsPalette.Description,
                 ),
@@ -6053,7 +6058,7 @@ private fun CompactActionButton(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 8.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = textColor,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 0.9.sp,
@@ -6063,11 +6068,41 @@ private fun CompactActionButton(
 }
 
 @Composable
+private fun localizedCottenDnsModes(): List<Choice<String>> = listOf(
+    Choice("legacy", WhiteDnsL10n.cottenDnsNormalMode),
+    Choice("cottenmax", WhiteDnsL10n.cottenMaxBetaMode),
+)
+
+@Composable
+private fun CottenDnsModeGuidance(usesMax: Boolean) {
+    val style = MaterialTheme.typography.bodySmall.copy(color = WhiteDnsPalette.Muted)
+    Text(text = WhiteDnsL10n.cottenMaxSharedCredentialHint, style = style)
+    if (usesMax) {
+        Text(text = WhiteDnsL10n.cottenMaxCipherHint, style = style)
+    }
+    Text(text = WhiteDnsL10n.cottenMaxReconnectHint, style = style)
+}
+
+@Composable
 private fun CottenDnsFeaturePresetGroup(
     settings: WhiteDnsSettings,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
     val presetSummary = cottenDnsPresetSummary(settings.configPreset)
+    val cottenProfile = settings.selectedConnectionProfile()
+    val usesMax = ConnectionProfile.normalizeEngine(cottenProfile.engine) == ConnectionProfile.EngineCottenDns &&
+        ConnectionProfile.normalizeServerType(cottenProfile.serverType) == ConnectionProfile.ServerTypeCottenDns &&
+        ConnectionProfile.normalizeTunnelMode(cottenProfile.tunnelMode) == "cottenmax"
+    if (ConnectionProfile.normalizeEngine(cottenProfile.engine) == ConnectionProfile.EngineCottenDns &&
+        ConnectionProfile.normalizeServerType(cottenProfile.serverType) == ConnectionProfile.ServerTypeCottenDns) {
+        WhiteDnsDropdownField(
+            label = WhiteDnsL10n.cottenDnsModeLabel,
+            value = cottenProfile.tunnelMode,
+            options = localizedCottenDnsModes(),
+            onValueChange = { mode -> onSettingsChange(settings.upsertConnectionProfile(cottenProfile.copy(tunnelMode = mode))) },
+        )
+        CottenDnsModeGuidance(usesMax)
+    }
     WhiteDnsDropdownField(
         label = "CottenDns Preset",
         value = settings.configPreset,
@@ -6080,25 +6115,30 @@ private fun CottenDnsFeaturePresetGroup(
         options = WhiteDnsOptions.transportModes,
         onValueChange = { mode -> onSettingsChange(settings.copy(transportMode = mode)) },
     )
-    WhiteDnsDropdownField(
-        label = "Delivery method",
-        value = settings.deliveryMode,
-        options = WhiteDnsOptions.deliveryModes,
-        onValueChange = { mode -> onSettingsChange(settings.copy(deliveryMode = mode)) },
-    )
-    WhiteDnsDropdownField(
-        label = "QNAME reshaping",
-        value = settings.qnameMode,
-        options = WhiteDnsOptions.qnameModes,
-        onValueChange = { mode -> onSettingsChange(settings.copy(qnameMode = mode)) },
-    )
-    Text(
-        text = "These three override the preset. Storm / Master DNS mode always forces TXT over UDP with 63-char labels.",
-        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = WhiteDnsPalette.Muted),
-    )
+    if (usesMax) {
+        Text(text = WhiteDnsL10n.cottenMaxAdaptiveHint, style = MaterialTheme.typography.bodySmall.copy(color = WhiteDnsPalette.Muted))
+    } else {
+        WhiteDnsDropdownField(
+            label = "Delivery method",
+            value = settings.deliveryMode,
+            options = WhiteDnsOptions.deliveryModes,
+            onValueChange = { mode -> onSettingsChange(settings.copy(deliveryMode = mode)) },
+        )
+        WhiteDnsDropdownField(
+            label = "QNAME reshaping",
+            value = settings.qnameMode,
+            options = WhiteDnsOptions.qnameModes,
+            onValueChange = { mode -> onSettingsChange(settings.copy(qnameMode = mode)) },
+        )
+        Text(
+            text = "These three override the preset. Storm / Master DNS mode always forces TXT over UDP with 63-char labels.",
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = MaterialTheme.typography.bodySmall.fontSize, color = WhiteDnsPalette.Muted),
+        )
+    }
     // Only shown for the encrypted transports. Everyone else never sees these
     // four fields, which is what keeps this section short for the common case.
     CottenDnsEncryptedResolverFields(settings, onSettingsChange)
+    CottenDnsOptionalConnectionFields(settings, onSettingsChange)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -6108,10 +6148,18 @@ private fun CottenDnsFeaturePresetGroup(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        CottenDnsFeatureLine("Transport", presetSummary.transport)
-        CottenDnsFeatureLine("Delivery", presetSummary.delivery)
-        CottenDnsFeatureLine("MTU", presetSummary.mtu)
-        CottenDnsFeatureLine("Hardening", "query-id randomization, EDNS cookie, injected NXDOMAIN ignore")
+        val transportSummary = if (settings.transportMode == "preset") presetSummary.transport else
+            WhiteDnsOptions.transportModes.firstOrNull { it.value == settings.transportMode }?.label ?: settings.transportMode
+        CottenDnsFeatureLine("Transport", transportSummary)
+        if (usesMax) {
+            CottenDnsFeatureLine("Delivery", "Adaptive TXT / AAAA")
+            CottenDnsFeatureLine("QNAME / answer limits", "${cottenProfile.cottenMaxOptions.safeQName}–${cottenProfile.cottenMaxOptions.maxQName} / ${cottenProfile.cottenMaxOptions.maxAnswer} bytes")
+            CottenDnsFeatureLine("Encryption", "ChaCha20-Poly1305 (Soar-compatible)")
+        } else {
+            CottenDnsFeatureLine("Delivery", presetSummary.delivery)
+            CottenDnsFeatureLine("MTU", presetSummary.mtu)
+            CottenDnsFeatureLine("Hardening", "query-id randomization, EDNS cookie, injected NXDOMAIN ignore")
+        }
     }
 }
 
@@ -6127,9 +6175,10 @@ private fun CottenDnsEncryptedResolverFields(
     settings: WhiteDnsSettings,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
-    val isDoH = settings.transportMode == "doh"
+    val isDoH = settings.transportMode in setOf("doh", "doh3")
+    val isDoQ = settings.transportMode == "doq"
     val isDoT = settings.transportMode == "dot"
-    if (!isDoH && !isDoT) {
+    if (!isDoH && !isDoT && !isDoQ) {
         return
     }
 
@@ -6143,9 +6192,9 @@ private fun CottenDnsEncryptedResolverFields(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
-            text = if (isDoH) "DNS over HTTPS" else "DNS over TLS",
+            text = when { isDoQ -> "DNS over QUIC"; settings.transportMode == "doh3" -> "DNS over HTTPS / HTTP3"; isDoH -> "DNS over HTTPS"; else -> "DNS over TLS" },
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 11.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.Ink,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.6.sp,
@@ -6153,7 +6202,7 @@ private fun CottenDnsEncryptedResolverFields(
         )
         Text(
             text = "Works as-is with public resolvers like Cloudflare or Google. Fill these in only when you point at your own encrypted DNS server.",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = WhiteDnsPalette.Muted),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = MaterialTheme.typography.bodySmall.fontSize, color = WhiteDnsPalette.Muted),
         )
 
         WhiteDnsTextField(
@@ -6163,7 +6212,7 @@ private fun CottenDnsEncryptedResolverFields(
             placeholder = "Leave blank for public resolvers",
             rawValue = true,
         )
-        if (isDoT) {
+        if (isDoT || isDoQ) {
             WhiteDnsTextField(
                 label = "Port",
                 value = settings.resolverDoTPort,
@@ -6198,13 +6247,103 @@ private fun CottenDnsEncryptedResolverFields(
         )
         Text(
             text = "A pin trusts one certificate and nothing else. Set it when the server uses its own self-signed certificate instead of a public one.",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = WhiteDnsPalette.Muted),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = MaterialTheme.typography.bodySmall.fontSize, color = WhiteDnsPalette.Muted),
         )
         Text(
-            text = "If the encrypted port is blocked, the app falls back to UDP and then TCP on port 53.",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = WhiteDnsPalette.Muted),
+            text = if (settings.transportMode in setOf("doh3", "doq") || settings.selectedConnectionProfile().tunnelMode == "cottenmax")
+                "This mode keeps resolver traffic encrypted. Try another configured transport if its port is blocked."
+            else "Legacy DoT/DoH can fall back to UDP and TCP/53 when unavailable.",
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = MaterialTheme.typography.bodySmall.fontSize, color = WhiteDnsPalette.Muted),
         )
     }
+}
+
+@Composable
+private fun CottenDnsOptionalConnectionFields(
+    settings: WhiteDnsSettings,
+    onSettingsChange: (WhiteDnsSettings) -> Unit,
+) {
+    val profile = settings.selectedConnectionProfile()
+    if (ConnectionProfile.normalizeEngine(profile.engine) != ConnectionProfile.EngineCottenDns ||
+        ConnectionProfile.normalizeServerType(profile.serverType) != ConnectionProfile.ServerTypeCottenDns) return
+    val options = profile.cottenMaxOptions
+    val max = ConnectionProfile.normalizeTunnelMode(profile.tunnelMode) == "cottenmax"
+    val encrypted = settings.transportMode in setOf("dot", "doh", "doh3", "doq")
+    fun update(next: shop.whitedns.client.model.CottenMaxOptions) {
+        onSettingsChange(settings.upsertConnectionProfile(profile.copy(cottenMaxOptions = next)))
+    }
+    if (encrypted) {
+        WhiteDnsDropdownField(
+            label = "Encrypted DNS padding",
+            value = options.dnsPaddingBlockSize,
+            options = (listOf(0, 128, 256, 512) + options.dnsPaddingBlockSize).distinct().map { Choice(it, if (it == 0) "Off" else "$it-byte blocks") },
+            onValueChange = { update(options.copy(dnsPaddingBlockSize = it)) },
+        )
+        if (settings.transportMode == "doh3") {
+            ToggleRow("Allow HTTPS fallback when HTTP/3 fails", options.doh3FallbackToDoh) {
+                update(options.copy(doh3FallbackToDoh = !options.doh3FallbackToDoh))
+            }
+        }
+        Text(text = "Padding costs bandwidth. QUIC needs a path that carries 1,200-byte UDP packets.", style = MaterialTheme.typography.bodySmall)
+    }
+    if (!max) return
+    var expanded by rememberSaveable(profile.id) { mutableStateOf(false) }
+    ToggleRow("Advanced CottenMax options", expanded) { expanded = !expanded }
+    if (!expanded) return
+    Text(text = "Defaults retain fast startup. Standbys use the same credential; existing streams reconnect after a server change.", style = MaterialTheme.typography.bodySmall)
+    WhiteDnsTextField("Standby domains (up to 8 domains total)", options.standbyDomains,
+        { update(options.copy(standbyDomains = it)) }, "backup.example, second.example", rawValue = true)
+    CottenMaxNumberField(profile.id, "Failover wait (ms)", options.failoverAfterMs, 100, 60000) { update(options.copy(failoverAfterMs = it)) }
+    ToggleRow("Vary QNAME label count", options.labelCountJitter) { update(options.copy(labelCountJitter = !options.labelCountJitter)) }
+    ToggleRow("Experimental QNAME loss guard", options.qnameLossGuard) { update(options.copy(qnameLossGuard = !options.qnameLossGuard)) }
+    if (options.qnameLossGuard) {
+        Text(text = "Recent authenticated near-cap answers can avoid false QNAME downgrades under loss. This can help lossy paths but may slow healthy ones.", style = MaterialTheme.typography.bodySmall)
+    }
+    ToggleRow("Authenticated resolver discovery", options.discoveryEnabled) { update(options.copy(discoveryEnabled = !options.discoveryEnabled)) }
+    if (options.discoveryEnabled) {
+        WhiteDnsTextField("Resolver country (optional)", options.discoveryCountry,
+            { update(options.copy(discoveryCountry = it)) }, "ir", rawValue = true)
+        WhiteDnsTextField("Additional resolver candidates", options.discoveryCandidates,
+            { update(options.copy(discoveryCandidates = it)) }, "IP:port, IP:port", rawValue = true)
+        ToggleRow("Remember verified resolver hints", options.discoveryCacheEnabled) { update(options.copy(discoveryCacheEnabled = !options.discoveryCacheEnabled)) }
+        if (options.discoveryCacheEnabled) {
+            WhiteDnsTextField("Network label (optional)", options.discoveryNetworkId,
+                { update(options.copy(discoveryNetworkId = it)) }, "home or mobile", rawValue = true)
+        }
+        CottenMaxNumberField(profile.id, "Address-range samples (0 disables)", options.discoverySampleRanges, 0, 4096) { update(options.copy(discoverySampleRanges = it)) }
+        Text(text = "Discovery tests additional DNS endpoints. Range sampling is opt-in; cached candidates authenticate again on every connection.", style = MaterialTheme.typography.bodySmall)
+        CottenMaxNumberField(profile.id, "Desired verified resolvers", options.discoveryWant, 1, 64) { update(options.copy(discoveryWant = it)) }
+        CottenMaxNumberField(profile.id, "Discovery concurrency", options.discoveryConcurrency, 1, 64) { update(options.copy(discoveryConcurrency = it)) }
+        CottenMaxNumberField(profile.id, "Discovery pace (ms)", options.discoveryPaceMs, 1, 60000) { update(options.copy(discoveryPaceMs = it)) }
+    }
+    CottenMaxNumberField(profile.id, "Initial QNAME size", options.safeQName, 64, 253) { update(options.copy(safeQName = it)) }
+    CottenMaxNumberField(profile.id, "Maximum QNAME size", options.maxQName, 64, 253) { update(options.copy(maxQName = it)) }
+    CottenMaxNumberField(profile.id, "Maximum DNS answer size", options.maxAnswer, 512, 1232) { update(options.copy(maxAnswer = it)) }
+    CottenMaxNumberField(profile.id, "Per-path query window", options.maxPathWindow, 1, 1024) { update(options.copy(maxPathWindow = it)) }
+    CottenMaxNumberField(profile.id, "Total in-flight queries", options.maxInflight, 1, 1024) { update(options.copy(maxInflight = it)) }
+    CottenMaxNumberField(profile.id, "Idle session retirement (ms)", options.sessionIdleMs, 1000, 90000) { update(options.copy(sessionIdleMs = it)) }
+    WhiteDnsDropdownField("Held poll interval", options.holdMs,
+        (0..1500 step 100).map { Choice(it, if (it == 0) "Off" else "$it ms") },
+        { update(options.copy(holdMs = it)) })
+}
+
+@Composable
+private fun CottenMaxNumberField(
+    profileId: String,
+    label: String,
+    value: Int,
+    min: Int,
+    max: Int,
+    onValueChange: (Int) -> Unit,
+) {
+    var text by rememberSaveable(profileId, label) { mutableStateOf(value.toString()) }
+    LaunchedEffect(value) { if (text.toIntOrNull() != value) text = value.toString() }
+    WhiteDnsTextField(label, text, { next ->
+        if (next.all(Char::isDigit)) {
+            text = next
+            next.toIntOrNull()?.takeIf { it in min..max }?.let(onValueChange)
+        }
+    }, "$min–$max", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), rawValue = true)
 }
 
 @Composable
@@ -6223,7 +6362,7 @@ private fun CottenDnsFeatureLine(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.Muted,
                 fontWeight = FontWeight.Medium,
             ),
@@ -6232,7 +6371,7 @@ private fun CottenDnsFeatureLine(
             text = value,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 lineHeight = 14.sp,
                 color = WhiteDnsPalette.Description,
             ),
@@ -6714,6 +6853,7 @@ private fun HeaderCard(
     languageCode: String,
     onLanguageCodeChange: (String) -> Unit,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
     var overflowExpanded by remember { mutableStateOf(false) }
@@ -6739,7 +6879,7 @@ private fun HeaderCard(
                     .clip(RoundedCornerShape(9.dp))
                     .background(WhiteDnsPalette.SurfaceAlt)
                     .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(9.dp))
-                    .semantics { contentDescription = context.getString(R.string.cd_logo_telegram) }
+                    .semantics { contentDescription = accessibilityResources.getString(R.string.cd_logo_telegram) }
                     .clickable(role = Role.Button) {
                         haptic.performLight()
                         openWhiteDnsTelegram(context)
@@ -6776,7 +6916,7 @@ private fun HeaderCard(
                         if (overflowExpanded) WhiteDnsPalette.Accent.copy(alpha = 0.28f) else WhiteDnsPalette.Border,
                         RoundedCornerShape(10.dp),
                     )
-                    .semantics { contentDescription = context.getString(R.string.cd_menu_button) }
+                    .semantics { contentDescription = accessibilityResources.getString(R.string.cd_menu_button) }
                     .clickable(role = Role.Button) {
                         haptic.performLight()
                         overflowExpanded = true
@@ -6809,7 +6949,7 @@ private fun HeaderCard(
                             Text(
                                 text = WhiteDnsL10n.menuVersion,
                                 style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 10.sp,
+                                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                                     color = WhiteDnsPalette.Muted,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.7.sp,
@@ -6981,7 +7121,7 @@ private fun LanguageModeSegmentedControl(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 10.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             color = textColor,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                             letterSpacing = 0.4.sp,
@@ -7073,7 +7213,7 @@ private fun DonationDialog(
             Text(
                 text = WhiteDnsL10n.supportBody,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 11.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     lineHeight = 16.sp,
                     color = WhiteDnsPalette.Description,
                 ),
@@ -7114,6 +7254,7 @@ private fun DonationWalletField(
     address: String,
     onCopy: () -> Unit,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     Column {
         FieldLabel(label)
@@ -7123,7 +7264,7 @@ private fun DonationWalletField(
                 .clip(RoundedCornerShape(10.dp))
                 .background(WhiteDnsPalette.Input)
                 .border(2.5.dp, WhiteDnsPalette.Divider, RoundedCornerShape(10.dp))
-                .semantics { contentDescription = context.getString(R.string.cd_copy_address, address) }
+                .semantics { contentDescription = accessibilityResources.getString(R.string.cd_copy_address, address) }
                 .clickable(role = Role.Button, onClick = onCopy)
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -7143,7 +7284,7 @@ private fun DonationWalletField(
                 text = WhiteDnsL10n.btnCopy,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     color = WhiteDnsPalette.AccentText,
-                    fontSize = 9.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.8.sp,
                 ),
@@ -7154,6 +7295,7 @@ private fun DonationWalletField(
 
 @Composable
 private fun NotificationPermissionBanner(onClick: () -> Unit) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
@@ -7168,7 +7310,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
         Text(
             text = WhiteDnsL10n.bannerNotificationBlockedTitle,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 10.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.WarningText,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.1.sp,
@@ -7178,7 +7320,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
         Text(
             text = WhiteDnsL10n.bannerNotificationBlockedBody,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 11.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 lineHeight = 15.sp,
                 color = WhiteDnsPalette.WarningText,
             ),
@@ -7190,7 +7332,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
                 .clip(RoundedCornerShape(10.dp))
                 .background(WhiteDnsPalette.Surface)
                 .border(1.5.dp, WhiteDnsPalette.Warning.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
-                .semantics { contentDescription = context.getString(R.string.cd_enable_vpn_notification) }
+                .semantics { contentDescription = accessibilityResources.getString(R.string.cd_enable_vpn_notification) }
                 .clickable(role = Role.Button) {
                     haptic.performMedium()
                     onClick()
@@ -7201,7 +7343,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
             Text(
                 text = WhiteDnsL10n.bannerEnableNotification,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 9.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.WarningText,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp,
@@ -7216,6 +7358,7 @@ private fun BatteryOptimizationBanner(
     onClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
@@ -7236,7 +7379,7 @@ private fun BatteryOptimizationBanner(
                 text = WhiteDnsL10n.bannerBatteryTitle,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.WarningText,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.1.sp,
@@ -7264,7 +7407,7 @@ private fun BatteryOptimizationBanner(
         Text(
             text = WhiteDnsL10n.bannerBatteryBody,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 11.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 lineHeight = 15.sp,
                 color = WhiteDnsPalette.WarningText,
             ),
@@ -7276,7 +7419,7 @@ private fun BatteryOptimizationBanner(
                 .clip(RoundedCornerShape(10.dp))
                 .background(WhiteDnsPalette.Surface)
                 .border(1.5.dp, WhiteDnsPalette.Warning.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
-                .semantics { contentDescription = context.getString(R.string.cd_allow_background_vpn) }
+                .semantics { contentDescription = accessibilityResources.getString(R.string.cd_allow_background_vpn) }
                 .clickable(role = Role.Button) {
                     haptic.performMedium()
                     onClick()
@@ -7287,7 +7430,7 @@ private fun BatteryOptimizationBanner(
             Text(
                 text = WhiteDnsL10n.bannerAllowBackground,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 9.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.WarningText,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp,
@@ -7321,7 +7464,7 @@ private fun FullVpnPerformanceWarning(onDismiss: () -> Unit) {
             Text(
                 text = WhiteDnsL10n.bannerFullVpnWarningTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 9.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.WarningText,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.9.sp,
@@ -7331,7 +7474,7 @@ private fun FullVpnPerformanceWarning(onDismiss: () -> Unit) {
             Text(
                 text = WhiteDnsL10n.bannerFullVpnWarningBody,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     lineHeight = 14.sp,
                     color = WhiteDnsPalette.WarningText,
                     fontWeight = FontWeight.Medium,
@@ -7404,7 +7547,7 @@ private fun SplitTunnelSettingsPanel(
                     Text(
                         text = WhiteDnsL10n.splitTunnelSelected,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 11.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             color = WhiteDnsPalette.Muted,
                         ),
                     )
@@ -7504,7 +7647,7 @@ private fun SplitTunnelAppDialog(
                     Text(
                         text = WhiteDnsL10n.splitTunnelNoAppsFound,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 11.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             color = WhiteDnsPalette.Muted,
                         ),
                     )
@@ -7568,6 +7711,7 @@ private fun SplitTunnelAppRow(
     checked: Boolean,
     onToggle: () -> Unit,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
@@ -7584,7 +7728,7 @@ private fun SplitTunnelAppRow(
                 },
             )
             .semantics {
-                contentDescription = context.getString(R.string.cd_split_tunnel_app_toggle, app.label)
+                contentDescription = accessibilityResources.getString(R.string.cd_split_tunnel_app_toggle, app.label)
             }
             .padding(vertical = 9.dp, horizontal = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -7616,7 +7760,7 @@ private fun SplitTunnelAppRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.Muted,
                 ),
             )
@@ -7828,7 +7972,7 @@ private fun ConnectButton(
                     Text(
                         text = label,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 11.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             fontWeight = FontWeight.Medium,
                             color = labelColor,
                         ),
@@ -7840,7 +7984,7 @@ private fun ConnectButton(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 9.sp,
+                                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                                 fontWeight = FontWeight.Medium,
                                 color = WhiteDnsPalette.Muted,
                             ),
@@ -7850,7 +7994,7 @@ private fun ConnectButton(
                             text = "${progressState.percent.coerceIn(0, 99)}%",
                             maxLines = 1,
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 10.sp,
+                                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                                 fontWeight = FontWeight.SemiBold,
                                 color = WhiteDnsPalette.Accent,
                             ),
@@ -7936,7 +8080,7 @@ private fun ResolverRuntimeSummary(
                         Text(
                             text = "${(progressState.completed * 100 / progressState.total)}%",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 7.sp,
+                                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                                 color = WhiteDnsPalette.Accent,
                                 fontWeight = FontWeight.Bold
                             )
@@ -7959,7 +8103,7 @@ private fun ResolverRuntimeSummary(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 11.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         color = WhiteDnsPalette.AccentText,
                         fontWeight = FontWeight.Medium,
                     ),
@@ -7993,6 +8137,7 @@ private fun ResolverRuntimeValue(
     modifier: Modifier = Modifier,
     showValidIcon: Boolean = false,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     Column(
         modifier = modifier
@@ -8000,7 +8145,7 @@ private fun ResolverRuntimeValue(
             .background(WhiteDnsPalette.Surface)
             .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(10.dp))
             .semantics {
-                contentDescription = context.getString(R.string.cd_stat_card_detail, label, value)
+                contentDescription = accessibilityResources.getString(R.string.cd_stat_card_detail, label, value)
             }
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 9.dp),
@@ -8022,7 +8167,7 @@ private fun ResolverRuntimeValue(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 9.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.Muted,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.6.sp,
@@ -8103,7 +8248,7 @@ private fun ConnectionVerificationSummary(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = color,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.7.sp,
@@ -8115,7 +8260,7 @@ private fun ConnectionVerificationSummary(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     lineHeight = 14.sp,
                     color = WhiteDnsPalette.Description,
                     fontWeight = FontWeight.Medium,
@@ -8438,7 +8583,7 @@ private fun SpeedIndicator(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 8.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     letterSpacing = 0.8.sp,
                     color = WhiteDnsPalette.Muted,
                 ),
@@ -8448,7 +8593,7 @@ private fun SpeedIndicator(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 11.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     fontWeight = FontWeight.Medium,
                     color = WhiteDnsPalette.Ink,
                 ),
@@ -8650,7 +8795,7 @@ private fun AutoTuneResultRow(
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 11.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     lineHeight = 15.sp,
                     color = if (result.status == "failed") WhiteDnsPalette.WarningText else WhiteDnsPalette.Muted,
                     fontWeight = if (result.status == "failed") FontWeight.Medium else FontWeight.Normal,
@@ -8702,7 +8847,7 @@ private fun AutoTuneMetricPill(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 7.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     letterSpacing = 0.5.sp,
                     color = WhiteDnsPalette.Muted,
                 ),
@@ -8712,7 +8857,7 @@ private fun AutoTuneMetricPill(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     fontWeight = FontWeight.Medium,
                     color = WhiteDnsPalette.Ink,
                 ),
@@ -8855,7 +9000,7 @@ private fun CompactMetricPill(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 8.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     letterSpacing = 0.6.sp,
                     color = WhiteDnsPalette.Muted,
                 ),
@@ -8865,7 +9010,7 @@ private fun CompactMetricPill(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 11.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     fontWeight = FontWeight.Medium,
                     color = WhiteDnsPalette.Ink,
                 ),
@@ -9032,7 +9177,7 @@ private fun ConnectionLogsBlock(
             Text(
                 text = WhiteDnsL10n.logsInlineTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = WhiteDnsPalette.SectionTitle,
                     letterSpacing = 1.5.sp,
                     fontWeight = FontWeight.Medium,
@@ -9079,7 +9224,7 @@ private fun ConnectionLogsBlock(
                         .background(if (index % 2 == 0) WhiteDnsPalette.SurfaceAlt else WhiteDnsPalette.Surface)
                         .padding(horizontal = 12.dp, vertical = 9.dp),
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 10.sp,
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
                         lineHeight = 15.sp,
                         color = WhiteDnsPalette.Description,
                     ),
@@ -9122,7 +9267,7 @@ private fun LogActionButton(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 9.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = WhiteDnsPalette.AccentText,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 1.sp,
@@ -9369,6 +9514,13 @@ private fun buildDiagnosticsText(
         appendLine("Profile: ${selectedProfile.name.ifBlank { selectedProfile.id }}")
         appendLine("Server: ${selectedProfile.customServerDomain.ifBlank { "not configured" }}")
         appendLine("Encryption key: ${if (selectedProfile.customServerEncryptionKey.isBlank()) "not configured" else "configured (redacted)"}")
+        appendLine("Engine: ${ConnectionProfile.normalizeEngine(selectedProfile.engine)}")
+        appendLine("Server type: ${ConnectionProfile.normalizeServerType(selectedProfile.serverType)}")
+        val cottenMode = if (ConnectionProfile.normalizeEngine(selectedProfile.engine) == ConnectionProfile.EngineCottenDns &&
+            ConnectionProfile.normalizeServerType(selectedProfile.serverType) == ConnectionProfile.ServerTypeCottenDns) {
+            ConnectionProfile.normalizeTunnelMode(selectedProfile.tunnelMode)
+        } else "not applicable"
+        appendLine("CottenDNS tunnel mode: $cottenMode")
         appendLine("CottenDNS preset: ${resolvedSettings.configPreset}")
         appendLine("Transport override: ${resolvedSettings.transportMode}")
         appendLine("Resolver profile: ${resolverProfile?.name ?: "Manual resolvers"}")
@@ -9565,7 +9717,7 @@ private fun ResolverActionButton(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 9.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = textColor,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 1.sp,
@@ -9584,6 +9736,7 @@ private fun SectionCard(
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val accessibilityResources = LocalResources.current
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
     val isOpen = expanded || !collapsible
@@ -9631,9 +9784,9 @@ private fun SectionCard(
                         modifier
                             .semantics {
                                 contentDescription = if (expanded) {
-                                    context.getString(R.string.cd_section_collapse, title)
+                                    accessibilityResources.getString(R.string.cd_section_collapse, title)
                                 } else {
-                                    context.getString(R.string.cd_section_expand, title)
+                                    accessibilityResources.getString(R.string.cd_section_expand, title)
                                 }
                             }
                             .clickable(role = Role.Button) {
@@ -9678,7 +9831,7 @@ private fun SectionCard(
                         Text(
                             text = if (expanded) WhiteDnsL10n.tapToCollapse else WhiteDnsL10n.tapToConfigure,
                             style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 9.sp,
+                                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                                 color = WhiteDnsPalette.Description,
                                 fontWeight = FontWeight.Medium,
                                 letterSpacing = 1.1.sp,
@@ -9705,7 +9858,7 @@ private fun SectionCard(
                     Text(
                         text = if (expanded) WhiteDnsL10n.parallelTestOpen else WhiteDnsL10n.parallelTestClosed,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 9.sp,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             color = if (expanded) WhiteDnsPalette.OnAccent else WhiteDnsPalette.Muted,
                             fontWeight = FontWeight.Medium,
                             letterSpacing = 0.8.sp,
@@ -9951,6 +10104,13 @@ private fun localizedEncryptionMethods(): List<Choice<Int>> = listOf(
 private fun localizedServerTypes(): List<Choice<String>> = listOf(
     Choice(ConnectionProfile.ServerTypeCottenDns, "CottenDns"),
     Choice(ConnectionProfile.ServerTypeCompatibility, "Storm / Master DNS"),
+)
+
+// Tunnel engine selection. Each engine is a separately-built native binary with
+// its own wire protocol; a profile connects only to a server of the same engine.
+private fun localizedEngines(): List<Choice<String>> = listOf(
+    Choice(ConnectionProfile.EngineCottenDns, "CottenDns"),
+    Choice(ConnectionProfile.EnginePhantomDns, "PhantomDns"),
 )
 
 @Composable

@@ -11,10 +11,14 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -182,6 +186,8 @@ object WhiteDnsPaletteLight : WhiteDnsPaletteColors {
 }
 
 private val LocalWhiteDnsPalette = staticCompositionLocalOf<WhiteDnsPaletteColors> { WhiteDnsPaletteDark }
+
+internal val LocalWhiteDnsLanguage = staticCompositionLocalOf { WhiteDnsLanguage.En }
 
 internal val LocalWhiteDnsStrings = staticCompositionLocalOf<WhiteDnsStrings> { EnglishStrings }
 
@@ -599,6 +605,13 @@ object WhiteDnsL10n {
     val profileFieldDomain: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldDomain
     val profileFieldEncryptionKey: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldEncryptionKey
     val profileFieldEncryptionMethod: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldEncryptionMethod
+    val cottenDnsModeLabel: String @Composable get() = LocalWhiteDnsStrings.current.cottenDnsModeLabel
+    val cottenDnsNormalMode: String @Composable get() = LocalWhiteDnsStrings.current.cottenDnsNormalMode
+    val cottenMaxBetaMode: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxBetaMode
+    val cottenMaxSharedCredentialHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxSharedCredentialHint
+    val cottenMaxReconnectHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxReconnectHint
+    val cottenMaxCipherHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxCipherHint
+    val cottenMaxAdaptiveHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxAdaptiveHint
     val profileDomainPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.profileDomainPlaceholder
     val profileEncryptionKeyPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.profileEncryptionKeyPlaceholder
     val profileMyCottenDnsPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.profileMyCottenDnsPlaceholder
@@ -778,8 +791,8 @@ object WhiteDnsPalette {
 }
 
 @Composable
-fun currentPalette(themeMode: String = WhiteDnsThemeMode.System): WhiteDnsPaletteColors {
-    return if (shouldUseDarkTheme(themeMode)) WhiteDnsPaletteDark else WhiteDnsPaletteLight
+fun currentPalette(themeMode: String = WhiteDnsThemeMode.System, accent: String = "purple"): WhiteDnsPaletteColors {
+    return whiteDnsBrandPalette(shouldUseDarkTheme(themeMode), accent)
 }
 
 private val WhiteDnsColorSchemeDark = darkColorScheme(
@@ -974,16 +987,32 @@ private fun Typography.withFontFamily(fontFamily: FontFamily): Typography {
     )
 }
 
+internal fun whiteDnsBrandColorScheme(dark: Boolean, accent: String): androidx.compose.material3.ColorScheme {
+    val palette = whiteDnsBrandPalette(dark, accent)
+    return (if (dark) WhiteDnsColorSchemeDark else WhiteDnsColorSchemeLight).copy(
+        primary = palette.Accent, onPrimary = palette.OnAccent,
+        primaryContainer = palette.AccentSurface, onPrimaryContainer = palette.AccentText,
+        surfaceTint = palette.Accent, error = palette.Error, onErrorContainer = palette.Error,
+        tertiary = palette.Success, onTertiaryContainer = palette.Success,
+        inversePrimary = whiteDnsBrandPalette(!dark, accent).Accent,
+        onError = if (dark) palette.Background else Color.White,
+    )
+}
+
 @Suppress("DEPRECATION")
 @Composable
 fun WhiteDnsTheme(
     themeMode: String = WhiteDnsThemeMode.System,
     languageCode: String = WhiteDnsLanguage.En,
+    accent: String = "purple",
     content: @Composable () -> Unit,
 ) {
     val darkTheme = shouldUseDarkTheme(themeMode)
-    val palette = if (darkTheme) WhiteDnsPaletteDark else WhiteDnsPaletteLight
-    val colorScheme = if (darkTheme) WhiteDnsColorSchemeDark else WhiteDnsColorSchemeLight
+    val palette = remember(darkTheme, accent) { whiteDnsBrandPalette(darkTheme, accent) }
+    val colorScheme = remember(darkTheme, accent) { whiteDnsBrandColorScheme(darkTheme, accent) }
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val resources = remember(context, languageCode, configuration) { whiteDnsResources(context, languageCode) }
     val isPersian = languageCode == WhiteDnsLanguage.Fa
     val layoutDirection = if (isPersian) LayoutDirection.Rtl else LayoutDirection.Ltr
     val typography = if (isPersian) {
@@ -1009,6 +1038,8 @@ fun WhiteDnsTheme(
     CompositionLocalProvider(
         LocalWhiteDnsPalette provides palette,
         LocalWhiteDnsStrings provides strings,
+        LocalWhiteDnsLanguage provides languageCode,
+        LocalResources provides resources,
         androidx.compose.ui.platform.LocalLayoutDirection provides layoutDirection,
     ) {
         MaterialTheme(

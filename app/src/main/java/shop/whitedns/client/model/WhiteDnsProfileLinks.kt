@@ -42,7 +42,12 @@ fun WhiteDnsSettings.exportCottenDnsProfileLink(profile: ConnectionProfile = sel
                 .put("domain", normalizedProfile.customServerDomain)
                 .put("encryption_key", normalizedProfile.customServerEncryptionKey)
                 .put("encryption_method", normalizedProfile.customServerEncryptionMethod)
-                .put("server_type", normalizedProfile.serverType),
+                .put("server_type", normalizedProfile.serverType)
+                .put("engine", normalizedProfile.engine)
+                .apply {
+                    if (ConnectionProfile.normalizeTunnelMode(normalizedProfile.tunnelMode) == "cottenmax") put("tunnel_mode", "cottenmax")
+                    if (normalizedProfile.cottenMaxOptions != CottenMaxOptions()) put("cottenmax_options", normalizedProfile.cottenMaxOptions.normalized().toJson())
+                },
         )
 
     val root = JSONObject()
@@ -144,6 +149,9 @@ fun WhiteDnsSettings.importCottenDnsProfileLink(
         customServerEncryptionKey = encryptionKey,
         customServerEncryptionMethod = encryptionMethod,
         serverType = serverType,
+        engine = ConnectionProfile.normalizeEngine(serverJson.optionalString("engine")),
+        tunnelMode = ConnectionProfile.normalizeTunnelMode(serverJson.optionalString("tunnel_mode")),
+        cottenMaxOptions = CottenMaxOptions.fromJson(serverJson.optJSONObject("cottenmax_options")),
         resolverProfileId = "",
         connectionMode = connectionMode,
     )

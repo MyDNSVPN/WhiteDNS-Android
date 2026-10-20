@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import shop.whitedns.client.model.ConnectionProfile
 import shop.whitedns.client.model.CottenDnsServerProfile
+import shop.whitedns.client.model.CottenMaxOptions
 import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.syncSelectedConnectionProfileFields
@@ -80,7 +81,7 @@ object RuntimeLaunchRequestStore {
         )
     }
 
-    private fun encodeServerProfile(profile: CottenDnsServerProfile): JSONObject {
+    internal fun encodeServerProfile(profile: CottenDnsServerProfile): JSONObject {
         return JSONObject()
             .put("id", profile.id)
             .put("label", profile.label)
@@ -88,9 +89,11 @@ object RuntimeLaunchRequestStore {
             .put("encryptionKey", profile.encryptionKey)
             .put("encryptionMethod", profile.encryptionMethod)
             .put("serverType", profile.serverType)
+            .put("tunnelMode", profile.tunnelMode)
+            .put("cottenMaxOptions", profile.cottenMaxOptions.toJson())
     }
 
-    private fun decodeServerProfile(json: JSONObject): CottenDnsServerProfile {
+    internal fun decodeServerProfile(json: JSONObject): CottenDnsServerProfile {
         return CottenDnsServerProfile(
             id = json.optString("id"),
             label = json.optString("label"),
@@ -102,6 +105,8 @@ object RuntimeLaunchRequestStore {
             serverType = ConnectionProfile.normalizeServerType(
                 json.optString("serverType", ConnectionProfile.ServerTypeCottenDns),
             ),
+            tunnelMode = ConnectionProfile.normalizeTunnelMode(json.optString("tunnelMode")),
+            cottenMaxOptions = CottenMaxOptions.fromJson(json.optJSONObject("cottenMaxOptions")),
         )
     }
 

@@ -1,0 +1,51 @@
+package engine
+
+// ScanResult holds the outcome of a single URL probe.
+// Exported for gomobile compatibility — only basic types.
+type ScanResult struct {
+	ServicePassed  int
+	ServiceTotal   int
+	PassedDomains  string
+	ServiceSummary string
+	Kind           string // http-proxy, socks-proxy, or empty for ordinary results
+	Label          string
+	URL            string
+	ResolvedIP     string // The actual IP address we connected to (DPI bypass)
+	DnsAnswer      string // TXT or DNS answer payload for DNS-oriented modes
+	Port           int    // The port scanned (e.g., 443, 8443, 80)
+	Status         int    // HTTP status code, 0 if it failed before finishing HTTP request
+	LatencyMs      int    // Total latency in milliseconds
+	Error          string // Empty string implies success
+
+	// DNS Discovery Mode fields (empty/false for regular HTTP scans)
+	DnsProtocol string // "UDP", "TCP", "DoT", "DoH", or "" for non-DNS scans
+	IsPoisoned  bool   // true if the resolver returned an IP mismatching the truth table
+
+	// DNS response header flags (flat basic types for gomobile compatibility).
+	// Populated for wire probes (UDP/TCP/DoT); zero for DoH JSON and HTTP scans.
+	HdrValid bool   // true if a DNS header was parsed for this probe
+	HdrDump  string // full single-line header dump (all flags + section counts)
+	RA       bool   // Recursion Available — resolver is an open recursor
+	TC       bool   // TrunCation bit set
+	Rcode    int    // DNS response code
+	Edns     bool   // resolver returned an EDNS0 OPT record
+
+	// Tunnel-suitability verdict for this resolver (see classifyTunnel).
+	TunnelReady  bool   // open recursion + EDNS0 + TXT passthrough all satisfied
+	TunnelReason string // short explanation of why ready / what is missing
+}
+
+// ResultHandler is a callback interface for delivering events out of the engine.
+// Gomobile binds this as an interface for Java/Swift bridging.
+type ResultHandler interface {
+	OnResult(result *ScanResult)
+	OnProgress(done, total int)
+	OnStateChange(state string) // "RUNNING", "PAUSED", "STOPPED"
+	OnComplete(openCount, deadCount, totalCount int)
+}
+
+// LogHandler is optionally implemented by a ResultHandler that shows a scan
+// log (the GUI's live activity); the engine reports its setup steps there.
+type LogHandler interface {
+	OnLog(message string)
+}

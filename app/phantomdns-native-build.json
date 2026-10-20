@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source_sha256": "01ba9614772a9148b6fc7be9bc9af0927e4ae681fdde0841ce52bb79b7883f7c",
+  "binaries": {
+    "arm64-v8a": "f798842b7840dd36ebb86d8dcdcdc791eb76102dfadd730ae58669cab03951cd",
+    "armeabi-v7a": "e9cf8a4295926e01a666b6e9dc6e81c0f54b452249dd4ad0b14de05b8c39f182",
+    "x86": "df813a9b71df34349ba7f6168a4adf7c52dfb2c5b61f1dcde62ee7fbc23a0139",
+    "x86_64": "303c3b17c9f3a06c9bcc2deff14d4d7e987755a6ca7829cc3598da655189a8fa"
+  }
+}

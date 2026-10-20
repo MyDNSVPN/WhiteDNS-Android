@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             WhiteDnsTheme(
                 themeMode = viewModel.uiState.settings.themeMode,
+                accent = viewModel.uiState.settings.themeAccent,
                 languageCode = viewModel.uiState.settings.languageCode,
             ) {
                 val context = LocalContext.current

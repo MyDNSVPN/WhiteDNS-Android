@@ -21,6 +21,8 @@ data class CottenDnsServerProfile(
     val encryptionKey: String,
     val encryptionMethod: Int,
     val serverType: String = ConnectionProfile.ServerTypeCottenDns,
+    val tunnelMode: String = "legacy",
+    val cottenMaxOptions: CottenMaxOptions = CottenMaxOptions(),
 )
 
 data class ConnectionProfile(
@@ -33,6 +35,12 @@ data class ConnectionProfile(
     // CottenDns is the only bundled engine. The compatibility server type keeps
     // CottenDns's legacy wire mode available for older compatible servers.
     val serverType: String = ServerTypeCottenDns,
+    // Which vendored tunnel engine this profile connects with. CottenDns is the
+    // default; PhantomDns is a separate, independently-built engine binary that
+    // speaks its own (incompatible) wire protocol and its own TOML dialect.
+    val engine: String = EngineCottenDns,
+    val tunnelMode: String = "legacy",
+    val cottenMaxOptions: CottenMaxOptions = CottenMaxOptions(),
     val resolverProfileId: String = "",
     val connectionMode: String = "proxy",
 ) : Serializable {
@@ -40,6 +48,18 @@ data class ConnectionProfile(
         const val DefaultId = "default"
         const val ServerTypeCottenDns = "cottendns"
         const val ServerTypeCompatibility = "compatibility"
+        const val EngineCottenDns = "cottendns"
+        const val EnginePhantomDns = "phantomdns"
+
+        fun normalizeTunnelMode(value: String?): String =
+            if (value?.trim()?.lowercase() == "cottenmax") "cottenmax" else "legacy"
+
+        fun normalizeEngine(value: String?): String {
+            return when (value?.trim()?.lowercase()) {
+                EnginePhantomDns, "phantom", "phantom-dns", "phantom_dns" -> EnginePhantomDns
+                else -> EngineCottenDns
+            }
+        }
 
         fun normalizeServerType(value: String?): String {
             // Storm DNS and Master DNS are the same legacy wire generation; the app
@@ -74,6 +94,7 @@ data class ConnectionProfile(
                 customServerEncryptionKey = settings.customServerEncryptionKey,
                 customServerEncryptionMethod = settings.customServerEncryptionMethod,
                 serverType = settings.serverType,
+                engine = settings.engine,
                 resolverProfileId = settings.selectedResolverProfileId,
                 connectionMode = settings.connectionMode,
             )
@@ -277,6 +298,7 @@ data class WhiteDnsSettings(
     val customServerEncryptionKey: String = "",
     val customServerEncryptionMethod: Int = 1,
     val serverType: String = ConnectionProfile.ServerTypeCottenDns,
+    val engine: String = ConnectionProfile.EngineCottenDns,
     val configPreset: String = "default",
     // CottenDns delivery/transport overrides. "preset" derives the value from the
     // active preset; any other value overrides it. Compatibility mode still forces
@@ -299,6 +321,7 @@ data class WhiteDnsSettings(
     val connectionMode: String = "proxy",
     val protocolType: String = "SOCKS5",
     val themeMode: String = WhiteDnsThemeMode.System,
+    val themeAccent: String = "purple",
     val languageCode: String = WhiteDnsLanguage.En,
     val resolverText: String = "",
     val listenIp: String = "127.0.0.1",
@@ -715,8 +738,10 @@ object WhiteDnsOptions {
         Choice("auto", "Auto (UDP + TCP/53 fallback)"),
         Choice("udp", "UDP/53 only"),
         Choice("tcp", "TCP/53 only"),
-        Choice("dot", "DoT (TLS, falls back to UDP/TCP)"),
-        Choice("doh", "DoH (HTTPS, falls back to UDP/TCP)"),
+        Choice("dot", "DoT (TLS)"),
+        Choice("doh", "DoH (HTTPS)"),
+        Choice("doh3", "DoH over HTTP/3 (UDP/443)"),
+        Choice("doq", "DNS over QUIC (UDP/853)"),
     )
 
     val deliveryModes = listOf(
@@ -794,6 +819,7 @@ fun WhiteDnsSettings.normalizedConnectionProfiles(): List<ConnectionProfile> {
                 name = profile.name.ifBlank { "Connection ${index + 1}" },
                 serverMode = "custom",
                 customServerEncryptionMethod = profile.customServerEncryptionMethod.coerceIn(0, 5),
+                tunnelMode = ConnectionProfile.normalizeTunnelMode(profile.tunnelMode),
                 resolverProfileId = profile.resolverProfileId.takeIf { it in resolverIds }.orEmpty(),
                 connectionMode = when (profile.connectionMode) {
                     "proxy", "vpn" -> profile.connectionMode
@@ -901,8 +927,10 @@ fun WhiteDnsSettings.syncSelectedConnectionProfileFields(): WhiteDnsSettings {
         customServerEncryptionKey = selected.customServerEncryptionKey,
         customServerEncryptionMethod = selected.customServerEncryptionMethod,
         serverType = ConnectionProfile.normalizeServerType(selected.serverType),
+        engine = ConnectionProfile.normalizeEngine(selected.engine),
         connectionMode = selectedConnectionMode,
         themeMode = selectedThemeMode,
+        themeAccent = themeAccent.takeIf { it in setOf("purple", "teal", "milk") } ?: "purple",
         languageCode = selectedLanguageCode,
         splitTunnelMode = normalizeSplitTunnelMode(splitTunnelMode),
         splitTunnelPackages = normalizePackageNames(splitTunnelPackages),
@@ -1204,6 +1232,9 @@ fun WhiteDnsSettings.selectAdvancedProfile(profileId: String): WhiteDnsSettings 
 // profile restores its complete CottenDns wire configuration.
 fun WhiteDnsSettings.copyCottenDnsWireSettingsFrom(source: WhiteDnsSettings): WhiteDnsSettings {
     return copy(
+        connectionProfiles = normalizedConnectionProfiles().map { profile ->
+            if (profile.id == source.selectedConnectionProfile().id) profile.copy(tunnelMode = source.selectedConnectionProfile().tunnelMode, cottenMaxOptions = source.selectedConnectionProfile().cottenMaxOptions) else profile
+        },
         transportMode = source.transportMode,
         deliveryMode = source.deliveryMode,
         qnameMode = source.qnameMode,
@@ -1293,6 +1324,7 @@ fun WhiteDnsSettings.upsertConnectionProfile(profile: ConnectionProfile): WhiteD
         name = profile.name.ifBlank { "Connection" },
         serverMode = "custom",
         customServerEncryptionMethod = profile.customServerEncryptionMethod.coerceIn(0, 5),
+                tunnelMode = ConnectionProfile.normalizeTunnelMode(profile.tunnelMode),
         resolverProfileId = profile.resolverProfileId.takeIf { it in resolverIds }.orEmpty(),
         connectionMode = when (profile.connectionMode) {
             "proxy", "vpn" -> profile.connectionMode
@@ -1978,7 +2010,7 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
             else -> "default"
         },
         transportMode = when (transportMode.trim().lowercase()) {
-            "auto", "udp", "tcp", "dot", "doh" -> transportMode.trim().lowercase()
+            "auto", "udp", "tcp", "dot", "doh", "doh3", "doq" -> transportMode.trim().lowercase()
             else -> "preset"
         },
         deliveryMode = when (deliveryMode.trim().lowercase()) {

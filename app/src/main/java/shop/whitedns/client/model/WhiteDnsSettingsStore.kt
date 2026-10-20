@@ -10,7 +10,22 @@ class WhiteDnsSettingsStore(
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PreferencesName, Context.MODE_PRIVATE)
 
+    fun languageCode(): String = preferences.getString(KeyLanguageCode, WhiteDnsLanguage.En)
+        .takeIf { it == WhiteDnsLanguage.Fa } ?: WhiteDnsLanguage.En
+
+    private fun migrateScannerAppearance() {
+        if (preferences.getBoolean("scanner_appearance_migrated", false)) return
+        val legacy = appContext.getSharedPreferences("full_scanner", Context.MODE_PRIVATE)
+        val edit = preferences.edit().putBoolean("scanner_appearance_migrated", true)
+        legacy.getString("accent", null)?.takeIf { it in setOf("purple", "teal", "milk") }
+            ?.let { edit.putString(KeyThemeAccent, it) }
+        legacy.getString("theme", null)?.takeIf { it in setOf("system", "light", "dark") }
+            ?.let { edit.putString(KeyThemeMode, it) }
+        edit.apply()
+    }
+
     fun load(): WhiteDnsSettings {
+        migrateScannerAppearance()
         val defaults = WhiteDnsSettings()
         migrateAdvancedDefaultsIfNeeded()
         val resolverText = preferences.getString(KeyResolverText, defaults.resolverText) ?: defaults.resolverText
@@ -122,6 +137,7 @@ class WhiteDnsSettingsStore(
             connectionMode = legacyConnectionMode,
             protocolType = preferences.getString(KeyProtocolType, defaults.protocolType) ?: defaults.protocolType,
             themeMode = preferences.getString(KeyThemeMode, defaults.themeMode) ?: defaults.themeMode,
+            themeAccent = preferences.getString(KeyThemeAccent, defaults.themeAccent) ?: defaults.themeAccent,
             languageCode = preferences.getString(KeyLanguageCode, defaults.languageCode) ?: defaults.languageCode,
             resolverText = if (resolverText == LegacyDefaultResolverText) defaults.resolverText else resolverText,
             listenIp = preferences.getString(KeyListenIp, defaults.listenIp) ?: defaults.listenIp,
@@ -286,6 +302,7 @@ class WhiteDnsSettingsStore(
             .putString(KeyConnectionMode, normalizedSettings.connectionMode)
             .putString(KeyProtocolType, normalizedSettings.protocolType)
             .putString(KeyThemeMode, normalizedSettings.themeMode)
+            .putString(KeyThemeAccent, normalizedSettings.themeAccent)
             .putString(KeyLanguageCode, normalizedSettings.languageCode)
             .putString(KeyResolverText, normalizedSettings.resolverText)
             .putString(KeyListenIp, normalizedSettings.listenIp)
@@ -384,6 +401,11 @@ class WhiteDnsSettingsStore(
                     serverType = ConnectionProfile.normalizeServerType(
                         item.optString("serverType", ConnectionProfile.ServerTypeCottenDns),
                     ),
+                    engine = ConnectionProfile.normalizeEngine(
+                        item.optString("engine", ConnectionProfile.EngineCottenDns),
+                    ),
+                    tunnelMode = ConnectionProfile.normalizeTunnelMode(item.optString("tunnelMode")),
+                    cottenMaxOptions = CottenMaxOptions.fromJson(item.optJSONObject("cottenMaxOptions")),
                     resolverProfileId = item.optString("resolverProfileId"),
                     connectionMode = item.optString("connectionMode", "proxy"),
                 )
@@ -405,6 +427,9 @@ class WhiteDnsSettingsStore(
                     .put("customServerEncryptionKey", profile.customServerEncryptionKey)
                     .put("customServerEncryptionMethod", profile.customServerEncryptionMethod)
                     .put("serverType", profile.serverType)
+                    .put("engine", profile.engine)
+                    .put("tunnelMode", profile.tunnelMode)
+                    .put("cottenMaxOptions", profile.cottenMaxOptions.toJson())
                     .put("resolverProfileId", profile.resolverProfileId)
                     .put("connectionMode", profile.connectionMode),
             )
@@ -816,6 +841,7 @@ class WhiteDnsSettingsStore(
         const val KeyConnectionMode = "connection_mode"
         const val KeyProtocolType = "protocol_type"
         const val KeyThemeMode = "theme_mode"
+        const val KeyThemeAccent = "theme_accent"
         const val KeyLanguageCode = "language_code"
         const val KeyResolverText = "resolver_text"
         const val KeyListenIp = "listen_ip"

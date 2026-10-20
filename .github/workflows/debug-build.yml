@@ -1,0 +1,102 @@
+name: CottenMax Beta Debug APK
+
+# Manual beta artifacts only. This workflow never signs or publishes a release.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cottenmax-beta-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANDROID_API: "26"
+  COTTENDNS_ANDROID_NDK_VERSION: "29.0.14206865"
+  GRADLE_ANDROID_NDK_VERSION: "26.3.11579264"
+
+jobs:
+  debug:
+    name: Build and test beta debug APKs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout selected beta source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: |
+            third_party/CottenDns/go.sum
+            third_party/PhantomDns/go.sum
+            third_party/Scanner/go.sum
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install Android platform, tools and NDKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.1.0" \
+            "ndk;${GRADLE_ANDROID_NDK_VERSION}" "ndk;${COTTENDNS_ANDROID_NDK_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          chmod +x gradlew
+
+      - name: Install scanner binding tools at vendored module versions
+        working-directory: third_party/Scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
+
+      - name: Rebuild both native engines with production source receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          make CottenDns PhantomDns SDK_ROOT="$ANDROID_HOME" NDK_HOST=linux-x86_64
+          go run scripts/cottendns-build-manifest.go verify
+          go run scripts/cottendns-build-manifest.go verify phantom
+
+      - name: Test and assemble debug APKs from this checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon testDebugUnitTest :app:assembleDebug
+
+      - name: Upload debug APKs and native source receipts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhiteDNS-CottenMax-beta-debug-${{ github.run_number }}
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/cottendns-native-build.json
+            app/phantomdns-native-build.json
+            third_party/Scanner/SCANNER_SOURCE.json
+          if-no-files-found: error
+
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhiteDNS-CottenMax-beta-test-report-${{ github.run_number }}
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            app/build/test-results/testDebugUnitTest
+          if-no-files-found: ignore

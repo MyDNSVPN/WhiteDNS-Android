@@ -162,6 +162,10 @@ func resolverTransportChain(name string) []resolverTransport {
 		return []resolverTransport{transportDoT, transportUDP, transportTCP}
 	case "doh":
 		return []resolverTransport{transportDoH, transportUDP, transportTCP}
+	case "doh3":
+		return []resolverTransport{transportDoH3}
+	case "doq":
+		return []resolverTransport{transportDoQ}
 	default: // "auto"
 		return []resolverTransport{transportUDP, transportTCP}
 	}
@@ -1077,6 +1081,9 @@ func (c *Client) sendUploadMTUProbe(ctx context.Context, conn *Connection, probe
 		return false, 0, nil
 	}
 
+	if !c.queryLimiter.wait(ctx, conn.Resolver, conn.Domain) {
+		return false, 0, ctx.Err()
+	}
 	startedAt := time.Now()
 	response, err := probeTransport.exchange(query, c.mtuTestTimeout)
 	if err != nil {
@@ -1201,6 +1208,9 @@ func (c *Client) sendDownloadMTUProbe(ctx context.Context, conn *Connection, pro
 		return false, 0, nil
 	}
 
+	if !c.queryLimiter.wait(ctx, conn.Resolver, conn.Domain) {
+		return false, 0, ctx.Err()
+	}
 	startedAt := time.Now()
 	response, err := probeTransport.exchange(query, c.mtuTestTimeout)
 	if err != nil {
@@ -1583,7 +1593,9 @@ func effectiveDownloadMTUProbeSize(downloadMTU int) int {
 		return 0
 	}
 
-	return downloadMTU + mtuDownResponseReserve
+	// A rejected lower boundary aborts binary search before any middle sizes.
+	// Keep small data MTUs testable against the server's wire-level minimum.
+	return max(VpnProto.MinMTUDownloadProbePayload, downloadMTU+mtuDownResponseReserve)
 }
 
 func computeSafeUploadMTU(uploadMTU int, cryptoOverhead int) int {

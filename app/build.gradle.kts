@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.io.File
 
 plugins {
     id("com.android.application")
@@ -31,6 +32,7 @@ val cottenDnsEngineSources = fileTree(rootProject.file("third_party/CottenDns"))
 android {
     namespace = "shop.whitedns.client"
     compileSdk = 36
+    buildToolsVersion = "36.1.0"
     ndkVersion = "26.3.11579264"
 
     defaultConfig {
@@ -58,6 +60,9 @@ android {
             }
         }
     }
+
+    // The app switches English/Persian offline; both languages must stay installed.
+    bundle { language { enableSplit = false } }
 
     buildTypes {
         debug {
@@ -97,6 +102,8 @@ android {
 
     packaging {
         jniLibs {
+            // These Go executables are already stripped; preserve their source-receipt bytes.
+            keepDebugSymbols += setOf("**/libcottendns_client.so", "**/libphantomdns_client.so")
             useLegacyPackaging = true
         }
         resources {
@@ -110,6 +117,8 @@ val verifyCottenDnsNativeBinaries by tasks.registering {
     description = "Fails when packaged CottenDns binaries do not match the checked-out engine source."
     inputs.files(cottenDnsNativeBinaries)
     inputs.files(cottenDnsEngineSources)
+    inputs.file(rootProject.file("scripts/cottendns-build-manifest.go"))
+    inputs.file(rootProject.file("app/cottendns-native-build.json")).optional()
 
     doLast {
         val repositoryDir = rootProject.projectDir
@@ -120,6 +129,15 @@ val verifyCottenDnsNativeBinaries by tasks.registering {
                 .start()
             val output = process.inputStream.bufferedReader().use { it.readText() }
             return process.waitFor() to output.trim()
+        }
+
+        // Local source builds use a source-stamped, checksummed receipt. The
+        // immutable Git-revision check below remains for old packaged cores.
+        if (rootProject.file("app/cottendns-native-build.json").isFile) {
+            val (exit, output) = commandResult("go", "run", "scripts/cottendns-build-manifest.go", "verify")
+            if (exit != 0) throw GradleException(output)
+            logger.lifecycle(output)
+            return@doLast
         }
 
         val (revisionExit, expectedRevision) = commandResult("git", "rev-parse", "HEAD")
@@ -162,13 +180,52 @@ val verifyCottenDnsNativeBinaries by tasks.registering {
     }
 }
 
+val verifyPhantomDnsNativeBinaries by tasks.registering {
+    group = "verification"
+    description = "Checks PhantomDNS source receipts and packaged native binaries."
+    inputs.files(fileTree("src/main/jniLibs") { include("**/libphantomdns_client.so") })
+    inputs.files(rootProject.fileTree("third_party/PhantomDns") { include("cmd/**", "internal/**", "go.mod", "go.sum") })
+    inputs.file(rootProject.file("scripts/cottendns-build-manifest.go"))
+    inputs.file(rootProject.file("app/phantomdns-native-build.json")).optional()
+    doLast {
+        if (rootProject.file("app/phantomdns-native-build.json").isFile) {
+            val process = ProcessBuilder("go", "run", "scripts/cottendns-build-manifest.go", "verify", "phantom")
+                .directory(rootProject.projectDir).redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            if (process.waitFor() != 0) throw GradleException(output)
+            logger.lifecycle(output.trim())
+        }
+    }
+}
+
 tasks.matching { task ->
     task.name.startsWith("merge") && task.name.endsWith("NativeLibs")
 }.configureEach {
-    dependsOn(verifyCottenDnsNativeBinaries)
+    dependsOn(verifyCottenDnsNativeBinaries, verifyPhantomDnsNativeBinaries)
 }
 
+// Build from the recorded, vendored scanner snapshot. A fresh checkout needs
+// no sibling repository; embedded ASN data participates in Gradle invalidation.
+val scannerSource = rootProject.projectDir.resolve("third_party/Scanner")
+val scannerAar = layout.projectDirectory.file("libs/scanner.aar")
+val buildScannerBindings by tasks.registering(Exec::class) {
+    inputs.files(fileTree(scannerSource) { include("engine/**", "mobile/**", "go.mod", "go.sum"); exclude("**/*_test.go", "**/testdata/**", "**/README*", "**/.cache/**") })
+    outputs.file(scannerAar)
+    workingDir(scannerSource)
+    doFirst {
+        check(scannerSource.resolve("go.mod").isFile) { "The vendored third_party/Scanner module is missing; restore the complete source checkout." }
+        scannerAar.asFile.parentFile.mkdirs()
+    }
+    val sdk = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+        ?: Properties().apply { rootProject.file("local.properties").inputStream().use { load(it) } }.getProperty("sdk.dir")
+    environment("ANDROID_HOME", sdk)
+    environment("ANDROID_NDK_HOME", File(sdk, "ndk/29.0.14206865").absolutePath)
+    commandLine("go", "run", "golang.org/x/mobile/cmd/gomobile", "bind", "-target=android", "-androidapi", "26", "-o", scannerAar.asFile.absolutePath, "./mobile")
+}
+tasks.named("preBuild") { dependsOn(buildScannerBindings) }
+
 dependencies {
+    implementation(files("libs/scanner.aar"))
     val composeBom = platform("androidx.compose:compose-bom:2026.04.01")
 
     implementation("androidx.core:core-ktx:1.18.0")
@@ -189,6 +246,7 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")

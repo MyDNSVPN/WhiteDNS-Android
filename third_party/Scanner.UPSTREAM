@@ -1,0 +1,4 @@
+repository=https://github.com/TaJirax/whitedns-scanner
+base_commit=98507925ec82732a2b4a2abc2ff57bafe6114f6e
+source_snapshot=third_party/Scanner/SCANNER_SOURCE.json
+source_tree_sha256=f3bd250c2c5c2f2247399350fc5b3e3284328a46f1dcd10672d948f245e94cd6

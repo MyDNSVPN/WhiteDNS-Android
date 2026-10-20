@@ -26,3 +26,33 @@ keystore.properties.example
 .cxx/
 dist/
 *.log
+
+# Generated scanner bindings; rebuilt from the sibling shared engine.
+/app/libs/scanner.aar
+
+# Local beta verification, README additions and scratch output
+# Existing tracked tests/READMEs stay in Git; local edits are excluded from the beta commit.
+**/*_test.go
+**/test/
+**/tests/
+**/testdata/
+**/src/androidTest/
+**/[Rr][Ee][Aa][Dd][Mm][Ee]*
+**/.cache/
+**/.bench/
+**/__pycache__/
+**/*.test
+**/*.test.exe
+**/*.prof
+**/*.trace
+**/coverage/
+**/*-sources.jar
+/docs/COTTENMAX_INTEGRATION.md
+/docs/PHANTOMDNS_ENGINE_INTEGRATION.md
+/docs/cottenmax-integration.md
+/docs/cottenmax-options.md
+/third_party/CottenDns/docs/COTTENMAX_EXPERIMENT.md
+/third_party/CottenDns/docs/IRAN_DNS_RESILIENCE.md
+/third_party/PhantomDns/phantomdns-client
+/third_party/PhantomDns/phantomdns-server
+/third_party/PhantomDns/internal/users.json

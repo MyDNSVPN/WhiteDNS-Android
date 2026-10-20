@@ -32,6 +32,7 @@ import shop.whitedns.client.model.ConnectionProfile
 import shop.whitedns.client.model.ResolvedWhiteDnsSettings
 import shop.whitedns.client.model.CottenDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsSettings
+import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
 import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
@@ -138,7 +139,7 @@ class WhiteDnsProxyService : Service() {
                     if (resolvedSettings.connectionMode != "proxy") {
                         throw IllegalStateException("Proxy mode is not enabled")
                     }
-                    if (resolvedSettings.resolverEntries.isEmpty()) {
+                    if (resolvedSettings.resolverEntries.isEmpty() && !launchRequest.serverProfile.canBootstrapResolversWithCottenMax(settings)) {
                         throw IllegalStateException("Resolvers are required to connect")
                     }
                     val serverProfile = launchRequest.serverProfile
@@ -560,6 +561,8 @@ class WhiteDnsProxyService : Service() {
                 encryptionKey = encryptionKey,
                 encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
                 serverType = ConnectionProfile.normalizeServerType(connectionProfile.serverType),
+            tunnelMode = ConnectionProfile.normalizeTunnelMode(connectionProfile.tunnelMode),
+            cottenMaxOptions = connectionProfile.cottenMaxOptions,
             )
         }
 

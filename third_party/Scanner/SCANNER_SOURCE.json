@@ -1,0 +1,190 @@
+{
+  "repository": "https://github.com/TaJirax/whitedns-scanner",
+  "base_commit": "98507925ec82732a2b4a2abc2ff57bafe6114f6e",
+  "source": "local working tree; production engine/mobile module closure and embedded data",
+  "working_tree_dirty": false,
+  "source_tree_sha256": "f3bd250c2c5c2f2247399350fc5b3e3284328a46f1dcd10672d948f245e94cd6",
+  "license_declaration": "No standalone scanner license found in source repository",
+  "files": [
+    {
+      "path": "GOLANG_X_CRYPTO_LICENSE.txt",
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+      "bytes": 1453
+    },
+    {
+      "path": "GOLANG_X_MOBILE_LICENSE.txt",
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+      "bytes": 1453
+    },
+    {
+      "path": "GOLANG_X_NET_LICENSE.txt",
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+      "bytes": 1453
+    },
+    {
+      "path": "GOLANG_X_SYNC_LICENSE.txt",
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+      "bytes": 1453
+    },
+    {
+      "path": "GOLANG_X_SYS_LICENSE.txt",
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+      "bytes": 1453
+    },
+    {
+      "path": "GOLANG_X_TEXT_LICENSE.txt",
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+      "bytes": 1453
+    },
+    {
+      "path": "NOTICE.txt",
+      "sha256": "3711d03f2a780bef654aee70d4b2371dfcef3ee23ec917048e4d858efd7d769f",
+      "bytes": 701
+    },
+    {
+      "path": "engine/antidpi.go",
+      "sha256": "b05bf37a76ed2aa7274491f020d06f9750cd6da91791773b3d7d7c3b19702e22",
+      "bytes": 2252
+    },
+    {
+      "path": "engine/asn.go",
+      "sha256": "f688a041b7379f87eaaf98671476ad6acedc08a1f59366c5daba9804fbed0276",
+      "bytes": 4950
+    },
+    {
+      "path": "engine/asn_export.go",
+      "sha256": "def34ec395b9e53cef673952ddacf70bd3193a945fbd1b13a10954c4bfdb4be4",
+      "bytes": 2404
+    },
+    {
+      "path": "engine/asndata/filtered_ipv4.csv",
+      "sha256": "ba5ff95f9a33d1285b81527e2ed29e657dbe9ac3ae697721c61fdc56d6d16645",
+      "bytes": 5502538
+    },
+    {
+      "path": "engine/asndata/filtered_ipv6.csv",
+      "sha256": "a87a9e7d95f2897bf5bd3874a696fe5d3dc3fb584ec8a926fa8a57d1459f425d",
+      "bytes": 170672
+    },
+    {
+      "path": "engine/cache.go",
+      "sha256": "d77a01410bf89d18fd078c35b630cb793e3a2c504433a4073ae58f7bdfd0c290",
+      "bytes": 19958
+    },
+    {
+      "path": "engine/concurrency.go",
+      "sha256": "13a18d8f3b92885b4aa2d5fe3cc99790be36fca0de5f564aeae7c96c714a1bc2",
+      "bytes": 2013
+    },
+    {
+      "path": "engine/config.go",
+      "sha256": "5dfb34aad7197db7ec11a2c686f962683c9caf64c80431f626db93dc7e2a2090",
+      "bytes": 5170
+    },
+    {
+      "path": "engine/dns_progress.go",
+      "sha256": "65bb69335cfafc60b3333335b86565234fbc23bb182be0050961d483a0860bbf",
+      "bytes": 1583
+    },
+    {
+      "path": "engine/dns_scanner.go",
+      "sha256": "95602f80b6e17209794342c6b9182417ff80633794500e34aad65abfd86aaccd",
+      "bytes": 32015
+    },
+    {
+      "path": "engine/edge_providers.go",
+      "sha256": "4e165f3eb22138f34a098386349497a199a89d245f2c5928ceda7f55d75ae0d6",
+      "bytes": 6494
+    },
+    {
+      "path": "engine/engine.go",
+      "sha256": "640cb9f8d6651b79d40cbe7e7457b69a2a08ba4292c98e503d177670435a5307",
+      "bytes": 22118
+    },
+    {
+      "path": "engine/modes.go",
+      "sha256": "e8cd1320ff0493ee5e5b25282a7f864fc97ec610705309d66947a2503855762c",
+      "bytes": 1942
+    },
+    {
+      "path": "engine/probe.go",
+      "sha256": "56730923e4980acc6fc70ae357ab2871af4611b53402e5727ad8a28b318ad5b8",
+      "bytes": 7432
+    },
+    {
+      "path": "engine/proxy.go",
+      "sha256": "d091a1587e78b55d953d620d2e07aceab9544f6ceaab3e8f0beea138bfdc3939",
+      "bytes": 8891
+    },
+    {
+      "path": "engine/rate_limit.go",
+      "sha256": "9ce5ea2b6bcf4dc4bca3266dd98a66b1c3659c15f63cb5475a3bfa2a05955382",
+      "bytes": 3559
+    },
+    {
+      "path": "engine/result.go",
+      "sha256": "07cd5a222e5107cba5bfdac070155235ba20d51f59568eda54ea647374e8a6c7",
+      "bytes": 2312
+    },
+    {
+      "path": "engine/service_probe.go",
+      "sha256": "8e7f0b335c12e11da839c43574e61a07d0acf59bcddce9378996e2686909ec7a",
+      "bytes": 8215
+    },
+    {
+      "path": "engine/stream_progress.go",
+      "sha256": "6d504934068f6079a2f431195264f2c5da864ff3ca0e205a913d0ed055fd844c",
+      "bytes": 1847
+    },
+    {
+      "path": "engine/target.go",
+      "sha256": "da0eec356847c9969dabc7c3858a6f53892a91b3ddc1e8023ea368a2164bcc62",
+      "bytes": 16993
+    },
+    {
+      "path": "engine/target_count.go",
+      "sha256": "3d0087f59d42ec8b02a522efca771d2d8ea7ae4c7babc6ed13cf625f7752bcdb",
+      "bytes": 3982
+    },
+    {
+      "path": "engine/target_family.go",
+      "sha256": "f2c5cf7d79ff928e66ba7c9eea6834bd846c42f8096bd3b9471bf337bfc22147",
+      "bytes": 6417
+    },
+    {
+      "path": "engine/target_type.go",
+      "sha256": "b95503e6f7362b7b361723a9af85561f542f56befdbf33750384afe5c0ae48c3",
+      "bytes": 2681
+    },
+    {
+      "path": "engine/txt_mode.go",
+      "sha256": "4650fe4f67cea394d4a2ae763b66c5d9483fa0459b8b708265e88ca827a818b3",
+      "bytes": 3091
+    },
+    {
+      "path": "engine/txt_probe.go",
+      "sha256": "69bf2bd3e61196b4c69a57eda5cb277d7e2af0bbd89031379fc962d52e4e0dfa",
+      "bytes": 6359
+    },
+    {
+      "path": "engine/worker.go",
+      "sha256": "5ac6aa3c628416dc949c32e32ef76a0e2fb3d236b078ba1ae05347312147ea09",
+      "bytes": 14545
+    },
+    {
+      "path": "go.mod",
+      "sha256": "df610247b72fa402b44ff68fedb6306d6130543c48f3d2a23cd571c5b393327e",
+      "bytes": 2780
+    },
+    {
+      "path": "go.sum",
+      "sha256": "58adbd72889856e247b9e7eb5d28962be9ec4ee3c62ad0e3a6f593c0ad94020f",
+      "bytes": 12719
+    },
+    {
+      "path": "mobile/scanner.go",
+      "sha256": "4515673773a0b4343f44ae9bafd5f85f884e4e7b578bb9e9b63424f46497d614",
+      "bytes": 21860
+    }
+  ]
+}

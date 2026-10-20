@@ -1168,7 +1168,7 @@ class WhiteDnsModelsTest {
         assertTrue(link.startsWith("CottenDns://"))
         assertEquals(setOf("name", "server"), exportedProfileJson.keys().asSequence().toSet())
         assertEquals(
-            setOf("domain", "encryption_key", "encryption_method", "server_type"),
+            setOf("domain", "encryption_key", "encryption_method", "server_type", "engine"),
             exportedServerJson.keys().asSequence().toSet(),
         )
         assertEquals("Main Profile", importedProfile.name)

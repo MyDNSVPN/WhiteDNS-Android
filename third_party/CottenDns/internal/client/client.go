@@ -22,12 +22,14 @@ import (
 
 	"cottendns-go/internal/arq"
 	"cottendns-go/internal/config"
+	"cottendns-go/internal/cottenmax"
 	dnsCache "cottendns-go/internal/dnscache"
 	DnsParser "cottendns-go/internal/dnsparser"
 	Enums "cottendns-go/internal/enums"
 	fragmentStore "cottendns-go/internal/fragmentstore"
 	"cottendns-go/internal/logger"
 	"cottendns-go/internal/mlq"
+	"cottendns-go/internal/resolvertransport"
 	"cottendns-go/internal/security"
 	VpnProto "cottendns-go/internal/vpnproto"
 )
@@ -219,13 +221,26 @@ type Client struct {
 	// the tunnel. All query paths (probe, session-init, health, data plane)
 	// dispatch on it. streamData carries the persistent per-resolver connections
 	// used by the data plane whenever the transport is not UDP.
-	transport  atomic.Int32
-	streamData streamDataTransport
-	dohHTTPMu  sync.Mutex
-	dohHTTP    *http.Client
+	transport      atomic.Int32
+	streamData     streamDataTransport
+	dohHTTPMu      sync.Mutex
+	dohHTTP        *http.Client
+	encryptedDNSMu sync.Mutex
+	encryptedDNS   *resolvertransport.Client
 
 	// pacer applies per-resolver adaptive rate limiting (see resolver_pacer.go).
 	pacer *resolverPacer
+	// queryLimiter is the optional global DNS query rate cap (nil = off).
+	queryLimiter     *queryRateLimiter
+	cottenMax        atomic.Pointer[cottenmax.Client]
+	cottenMaxStreams atomic.Int64
+
+	// Domain rotation (domain_rotation.go). domainsMu guards standbyDomains
+	// and writes to cfg.Domains; failedFullScans is Run-loop only.
+	domainsMu          sync.Mutex
+	standbyDomains     []string
+	failedFullScans    int
+	domainListAnswered atomic.Bool
 
 	// Local Proxy Daemons
 	tcpListener *TCPListener
@@ -248,6 +263,7 @@ type Client struct {
 	pingManager *PingManager
 
 	// DNS Management
+	pendingDNS             dnsPendingQueries
 	localDNSCache          *dnsCache.Store
 	dnsResponses           *fragmentStore.Store[dnsFragmentKey]
 	localDNSCachePersist   bool
@@ -293,6 +309,8 @@ type encodedOutboundDatagram struct {
 	serverKey string
 	packet    []byte
 	priority  int
+	resolver  string // query rate limit scope keys
+	domain    string
 }
 
 type encodedOutboundTask struct {
@@ -458,11 +476,18 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 
 	runtimeBufferSize := runtimeDNSReadBufferSize(cfg.MaxDownloadMTU)
 	c := &Client{
-		cfg:                      cfg,
-		log:                      log,
-		codec:                    codec,
-		balancer:                 NewBalancer(balancerStrategy),
-		pacer:                    newResolverPacer(cfg.ResolverRateLimitEnabled),
+		cfg:      cfg,
+		log:      log,
+		codec:    codec,
+		balancer: NewBalancer(balancerStrategy),
+		pacer:    newResolverPacer(cfg.ResolverRateLimitEnabled),
+		queryLimiter: newQueryRateLimiter(
+			cfg.QueryRateLimitPerSecond,
+			cfg.QueryRateLimitPerResolverPerSecond,
+			cfg.QueryRateLimitPerDomainPerSecond,
+			cfg.QueryRateLimitBurst,
+			cfg.QueryTimingJitter,
+		),
 		uploadCompression:        uint8(cfg.UploadCompressionType),
 		downloadCompression:      uint8(cfg.DownloadCompressionType),
 		mtuCryptoOverhead:        mtuCryptoOverhead(cfg.DataEncryptionMethod),
@@ -531,6 +556,7 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 
 	c.carrier = newCarrierSelector(c.queryTypes, c.now)
 	c.pingManager = newPingManager(c)
+	c.initDomainRotation()
 	return c
 }
 
@@ -553,10 +579,20 @@ func (c *Client) nextSessionInitRetryDelay(failures int) time.Duration {
 
 // Run starts the main execution loop of the client.
 func (c *Client) Run(ctx context.Context) error {
+	if c.cfg.TunnelMode == config.TunnelCottenMax {
+		return c.runCottenMax(ctx)
+	}
 	c.successMTUChecks = false
 	c.runtimePhase.Store(clientPhaseStarting)
 	defer c.runtimePhase.Store(clientPhaseStopped)
 	c.log.Infof("\U0001F504 <cyan>Starting main runtime loop...</cyan>")
+	if c.queryLimiter != nil {
+		c.log.Infof(
+			"\U0001F6A6 <cyan>Query rate limit: total=%g/s per-resolver=%g/s per-domain=%g/s burst=%d jitter=%g (duplication forced to 1, session racing off)</cyan>",
+			c.cfg.QueryRateLimitPerSecond, c.cfg.QueryRateLimitPerResolverPerSecond, c.cfg.QueryRateLimitPerDomainPerSecond,
+			c.cfg.QueryRateLimitBurst, c.cfg.QueryTimingJitter,
+		)
+	}
 	c.logConnectionProgress("starting", 5)
 	sessionInitRetryDelay := time.Duration(0)
 	sessionInitRetryFailures := 0
@@ -608,7 +644,7 @@ func (c *Client) Run(ctx context.Context) error {
 						c.notifySessionCloseBurst(time.Second)
 						c.StopAsyncRuntime()
 						return nil
-					case <-time.After(5 * time.Second):
+					case <-time.After(c.failedScanRetryDelay()):
 					}
 					continue
 				}
@@ -622,12 +658,13 @@ func (c *Client) Run(ctx context.Context) error {
 						c.notifySessionCloseBurst(time.Second)
 						c.StopAsyncRuntime()
 						return nil
-					case <-time.After(5 * time.Second):
+					case <-time.After(c.failedScanRetryDelay()):
 					}
 					continue
 				}
 
 				c.successMTUChecks = true
+				c.failedFullScans = 0
 				c.ShortPrintBanner()
 			}
 
@@ -683,6 +720,7 @@ func (c *Client) Run(ctx context.Context) error {
 				}
 
 				c.ensureLocalDNSCachePersistence(ctx)
+				c.requestDomainList(ctx)
 			}
 
 			select {

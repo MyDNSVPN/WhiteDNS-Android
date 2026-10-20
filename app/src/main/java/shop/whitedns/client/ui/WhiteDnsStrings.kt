@@ -463,6 +463,13 @@ interface WhiteDnsStrings {
     val profileFieldDomain: String
     val profileFieldEncryptionKey: String
     val profileFieldEncryptionMethod: String
+    val cottenDnsModeLabel: String
+    val cottenDnsNormalMode: String
+    val cottenMaxBetaMode: String
+    val cottenMaxSharedCredentialHint: String
+    val cottenMaxReconnectHint: String
+    val cottenMaxCipherHint: String
+    val cottenMaxAdaptiveHint: String
 
     // Server engine generation of the profile's target server. Default getter so
     // language packs inherit an English fallback without each needing an override.
@@ -1149,6 +1156,13 @@ object EnglishStrings : WhiteDnsStrings {
     override val profileFieldDomain = "Domain"
     override val profileFieldEncryptionKey = "Encryption Key"
     override val profileFieldEncryptionMethod = "Encryption Method"
+    override val cottenDnsModeLabel = "CottenDNS mode"
+    override val cottenDnsNormalMode = "Normal CottenDNS"
+    override val cottenMaxBetaMode = "CottenMax (beta)"
+    override val cottenMaxSharedCredentialHint = "Both modes use this connection’s domain and key. Update the CottenDNS server once to enable Max; the updated server accepts both modes."
+    override val cottenMaxReconnectHint = "Save changes, then disconnect and reconnect. If Max cannot connect, select Normal CottenDNS and reconnect with the same profile."
+    override val cottenMaxCipherHint = "Max uses its own Soar-compatible ChaCha20-Poly1305 encryption. Your normal-mode cipher setting is kept for switching back."
+    override val cottenMaxAdaptiveHint = "Max adapts TXT/AAAA delivery and packet sizes automatically. Legacy delivery, compression and duplication settings do not control Max; use Advanced CottenMax options."
     override val profileDomainPlaceholder = "v.example.com"
     override val profileEncryptionKeyPlaceholder = "32-character key"
     override val profileMyCottenDnsPlaceholder = "My CottenDns"
@@ -1816,6 +1830,13 @@ object PersianStrings : WhiteDnsStrings {
     override val profileFieldDomain = "دامنه"
     override val profileFieldEncryptionKey = "کلید رمزنگاری"
     override val profileFieldEncryptionMethod = "روش رمزنگاری"
+    override val cottenDnsModeLabel = "حالت CottenDNS"
+    override val cottenDnsNormalMode = "CottenDNS معمولی"
+    override val cottenMaxBetaMode = "CottenMax (بتا)"
+    override val cottenMaxSharedCredentialHint = "هر دو حالت از دامنه و کلید همین اتصال استفاده می‌کنند. برای فعال شدن Max، سرور CottenDNS را یک بار به‌روز کنید؛ سرور جدید هر دو حالت را می‌پذیرد."
+    override val cottenMaxReconnectHint = "تغییرات را ذخیره کنید، سپس اتصال را قطع و دوباره وصل کنید. اگر Max وصل نشد، CottenDNS معمولی را انتخاب کنید و با همین پروفایل دوباره وصل شوید."
+    override val cottenMaxCipherHint = "Max از رمزنگاری ChaCha20-Poly1305 سازگار با Soar استفاده می‌کند. تنظیم رمزنگاری حالت معمولی برای بازگشت شما حفظ می‌شود."
+    override val cottenMaxAdaptiveHint = "Max نوع پاسخ TXT/AAAA و اندازه بسته‌ها را خودکار تنظیم می‌کند. تنظیمات قدیمی نوع پاسخ، فشرده‌سازی و تکثیر بر Max اثر ندارند؛ از گزینه‌های پیشرفته CottenMax استفاده کنید."
     override val profileDomainPlaceholder = "v.example.com"
     override val profileEncryptionKeyPlaceholder = "کلید ۳۲ کاراکتری"
     override val profileMyCottenDnsPlaceholder = "CottenDns من"

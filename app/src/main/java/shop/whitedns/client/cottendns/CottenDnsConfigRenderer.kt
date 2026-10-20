@@ -3,6 +3,7 @@ package shop.whitedns.client.cottendns
 import shop.whitedns.client.model.ConnectionProfile
 import shop.whitedns.client.model.ResolvedWhiteDnsSettings
 import shop.whitedns.client.model.CottenDnsServerProfile
+import shop.whitedns.client.model.CottenMaxOptions
 import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.model.normalizedResolverProfiles
 import shop.whitedns.client.model.resolve
@@ -41,9 +42,12 @@ object CottenDnsConfigRenderer {
             appendLine("DOMAINS = ${domainsToml(serverProfile.domain)}")
             appendLine("DATA_ENCRYPTION_METHOD = ${serverProfile.encryptionMethod}")
             appendLine("ENCRYPTION_KEY = \"${escape(serverProfile.encryptionKey)}\"")
+            val mode = if (ConnectionProfile.normalizeServerType(serverProfile.serverType) == ConnectionProfile.ServerTypeCompatibility) "legacy" else ConnectionProfile.normalizeTunnelMode(serverProfile.tunnelMode)
+            appendLine("TUNNEL_MODE = \"$mode\"")
             appendLine("PROTOCOL_TYPE = \"${escape(resolved.protocolType)}\"")
             appendServerTypeToml(serverProfile.serverType, resolved.configPreset, resolved.transportMode, resolved.deliveryMode, resolved.qnameMode, resolved)
             appendClientSettingsToml(resolved)
+            appendCottenOptionsToml(serverProfile, mode, resolved)
         }.trimEnd()
     }
 
@@ -458,7 +462,7 @@ object CottenDnsConfigRenderer {
         transport: String,
         resolved: ResolvedWhiteDnsSettings,
     ) {
-        if (transport != "dot" && transport != "doh") {
+        if (transport !in setOf("dot", "doh", "doh3", "doq")) {
             return
         }
 
@@ -468,7 +472,9 @@ object CottenDnsConfigRenderer {
         if (resolved.resolverTlsPin.isNotEmpty()) {
             appendLine("RESOLVER_TLS_PIN = \"${escape(resolved.resolverTlsPin)}\"")
         }
-        if (transport == "dot") {
+        if (transport == "doq") {
+            appendLine("RESOLVER_DOQ_PORT = ${resolved.resolverDoTPort}")
+        } else if (transport == "dot") {
             appendLine("RESOLVER_DOT_PORT = ${resolved.resolverDoTPort}")
         } else {
             appendLine("RESOLVER_DOH_PORT = ${resolved.resolverDoHPort}")
@@ -487,6 +493,50 @@ object CottenDnsConfigRenderer {
         }
     }
 
+    private fun StringBuilder.appendCottenOptionsToml(
+        serverProfile: CottenDnsServerProfile,
+        mode: String,
+        resolved: ResolvedWhiteDnsSettings,
+    ) {
+        if (ConnectionProfile.normalizeServerType(serverProfile.serverType) != ConnectionProfile.ServerTypeCottenDns) return
+        val options = serverProfile.cottenMaxOptions.normalized()
+        val transport = if (resolved.transportMode == "preset") resolverTransport(normalizeConfigPreset(resolved.configPreset)) else resolved.transportMode
+        if (transport in setOf("dot", "doh", "doh3", "doq") && options.dnsPaddingBlockSize > 0) {
+            appendLine("DNS_PADDING_BLOCK_SIZE = ${options.dnsPaddingBlockSize}")
+        }
+        if (transport == "doh3" && options.doh3FallbackToDoh) {
+            appendLine("RESOLVER_HTTP3_FALLBACK = true")
+        }
+        if (mode != "cottenmax") return
+        val primary = serverProfile.domain.split(',').map { it.trim().trimEnd('.').lowercase() }.distinct()
+        val standbys = CottenMaxOptions.entries(options.standbyDomains).filterNot { it in primary }.take((8 - primary.size).coerceAtLeast(0))
+        if (standbys.isNotEmpty()) appendLine("STANDBY_DOMAINS = ${standbys.joinToString(prefix = "[", postfix = "]") { "\"${escape(it)}\"" }}")
+        appendLine("COTTENMAX_FAILOVER_AFTER_MILLISECONDS = ${options.failoverAfterMs}")
+        appendLine("COTTENMAX_SAFE_QNAME = ${options.safeQName}")
+        appendLine("COTTENMAX_MAX_QNAME = ${options.maxQName}")
+        appendLine("COTTENMAX_MAX_ANSWER = ${options.maxAnswer}")
+        appendLine("COTTENMAX_MAX_PATH_WINDOW = ${options.maxPathWindow}")
+        appendLine("COTTENMAX_MAX_INFLIGHT = ${options.maxInflight}")
+        appendLine("COTTENMAX_SESSION_IDLE_MILLISECONDS = ${options.sessionIdleMs}")
+        appendLine("COTTENMAX_HOLD_MILLISECONDS = ${options.holdMs}")
+        appendLine("QNAME_LABEL_COUNT_JITTER = ${options.labelCountJitter}")
+        if (options.qnameLossGuard) appendLine("COTTENMAX_QNAME_LOSS_GUARD = true")
+        appendLine("RESOLVER_DISCOVERY_ENABLED = ${options.discoveryEnabled}")
+        if (options.discoveryEnabled) {
+            appendLine("RESOLVER_DISCOVERY_COUNTRY = \"${escape(options.discoveryCountry)}\"")
+            appendLine("RESOLVER_DISCOVERY_SAMPLE_RANGES = ${options.discoverySampleRanges}")
+            appendLine("RESOLVER_DISCOVERY_WANT = ${options.discoveryWant}")
+            appendLine("RESOLVER_DISCOVERY_CONCURRENCY = ${options.discoveryConcurrency}")
+            appendLine("RESOLVER_DISCOVERY_PACE_MILLISECONDS = ${options.discoveryPaceMs}")
+            val candidates = CottenMaxOptions.entries(options.discoveryCandidates)
+            if (candidates.isNotEmpty()) appendLine("RESOLVER_DISCOVERY_CANDIDATES = ${candidates.joinToString(prefix = "[", postfix = "]") { "\"${escape(it)}\"" }}")
+            if (options.discoveryCacheEnabled) {
+                appendLine("RESOLVER_DISCOVERY_CACHE_FILE = \"cottendns-discovery-cache.json\"")
+                appendLine("RESOLVER_DISCOVERY_NETWORK_ID = \"${escape(options.discoveryNetworkId)}\"")
+            }
+        }
+    }
+
     private fun domainsToml(domain: String): String {
         val domains = domain.split(',')
             .map { it.trim().trimEnd('.') }
@@ -499,6 +549,9 @@ object CottenDnsConfigRenderer {
         return value
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
     }
 
     private fun ConnectionProfile.toCottenDnsServerProfile(): CottenDnsServerProfile {
@@ -514,6 +567,8 @@ object CottenDnsConfigRenderer {
             encryptionKey = encryptionKey,
             encryptionMethod = customServerEncryptionMethod.coerceIn(0, 5),
             serverType = ConnectionProfile.normalizeServerType(serverType),
+            tunnelMode = ConnectionProfile.normalizeTunnelMode(tunnelMode),
+            cottenMaxOptions = cottenMaxOptions,
         )
     }
 }

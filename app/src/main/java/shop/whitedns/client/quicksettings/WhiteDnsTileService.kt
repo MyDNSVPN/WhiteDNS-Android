@@ -13,6 +13,7 @@ import shop.whitedns.client.MainActivity
 import shop.whitedns.client.model.ConnectionProfile
 import shop.whitedns.client.model.CottenDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsSettings
+import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
 import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
@@ -46,7 +47,7 @@ class WhiteDnsTileService : TileService() {
         val settings = settingsStore.load().runtimeConnectionSettings()
         val resolvedSettings = settings.resolve()
         val serverProfile = selectServerProfile(settings)
-        if (resolvedSettings.resolverEntries.isEmpty() || serverProfile == null) {
+        if ((resolvedSettings.resolverEntries.isEmpty() && !settings.canBootstrapResolversWithCottenMax()) || serverProfile == null) {
             updateTile(subtitle = "Needs setup", state = Tile.STATE_UNAVAILABLE)
             openApp()
             return
@@ -152,6 +153,8 @@ class WhiteDnsTileService : TileService() {
             encryptionKey = encryptionKey,
             encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
             serverType = ConnectionProfile.normalizeServerType(connectionProfile.serverType),
+            tunnelMode = ConnectionProfile.normalizeTunnelMode(connectionProfile.tunnelMode),
+            cottenMaxOptions = connectionProfile.cottenMaxOptions,
         )
     }
 }

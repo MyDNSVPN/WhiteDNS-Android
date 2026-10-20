@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -42,7 +43,8 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="CottenDns" />
+                <!-- Preserve existing exported links: this legacy scheme is deliberately case-sensitive. -->
+                <data android:scheme="CottenDns" tools:ignore="AppLinkUrlError" />
                 <data android:scheme="cottendns" />
             </intent-filter>
         </activity>
@@ -64,6 +66,8 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:process=":proxy" />
+
+        <service android:name=".scanner.FullScannerService" android:exported="false" android:foregroundServiceType="dataSync" />
 
         <service
             android:name=".scan.WhiteDnsScanService"
