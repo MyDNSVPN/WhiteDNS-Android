@@ -47,6 +47,7 @@ import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
 import shop.whitedns.client.proxy.WhiteDnsProxyService
+import shop.whitedns.client.runtime.CottenDnsTunnelReadiness
 import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
 import shop.whitedns.client.runtime.WhiteDnsRuntimeStateStore
 import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
@@ -297,8 +298,10 @@ class WhiteDnsVpnService : VpnService() {
         resolvedSettings: ResolvedWhiteDnsSettings,
     ) {
         val startupFailure = AtomicReference<String?>(null)
+        val readiness = CottenDnsTunnelReadiness(serverProfile.tunnelMode, settings.engine)
         val lastStartupActivityMillis = AtomicLong(System.currentTimeMillis())
         CottenDnsProcessManager.start(serverProfile, settings) { line ->
+            readiness.observe(line)
             lastStartupActivityMillis.set(System.currentTimeMillis())
             logInfo(line)
             detectCottenDnsStartupFailure(line)?.let { failure ->
@@ -309,6 +312,7 @@ class WhiteDnsVpnService : VpnService() {
             listenPort = resolvedSettings.listenPort,
             startupFailure = { startupFailure.get() },
             lastActivityMillis = { lastStartupActivityMillis.get() },
+            readiness = readiness,
         )
         logInfo("SOCKS proxy is ready")
         startVpnRouting(sessionId, settings, resolvedSettings)
@@ -352,8 +356,11 @@ class WhiteDnsVpnService : VpnService() {
         listenPort: Int,
         startupFailure: () -> String?,
         lastActivityMillis: () -> Long,
+        readiness: CottenDnsTunnelReadiness,
     ) {
+        val startedAt = android.os.SystemClock.elapsedRealtime()
         while (true) {
+            readiness.startupFailure()?.let { throw IllegalStateException(it) }
             startupFailure()?.let { failure ->
                 throw IllegalStateException("CottenDns startup failed: $failure")
             }
@@ -364,8 +371,11 @@ class WhiteDnsVpnService : VpnService() {
                     "CottenDns process exited before SOCKS was ready${exitCode?.let { " (exit code $it)" }.orEmpty()}",
                 )
             }
-            if (canConnectToLocalPort(listenPort)) {
+            if (canConnectToLocalPort(listenPort) && readiness.isReady()) {
                 return
+            }
+            if (readiness.required && android.os.SystemClock.elapsedRealtime() - startedAt >= 90_000L) {
+                throw IllegalStateException("CottenMax tunnel did not become ready; VPN routing needs a verified tunnel")
             }
             if (now - lastActivityMillis() >= ProxyStartupIdleTimeoutMillis) {
                 throw IllegalStateException(

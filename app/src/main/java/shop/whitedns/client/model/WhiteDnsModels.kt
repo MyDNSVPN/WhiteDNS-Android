@@ -617,6 +617,8 @@ data class WhiteDnsScanState(
     val durationMillis: Long = 0,
     val message: String = "",
     val validResolverEntries: List<String> = emptyList(),
+    val testingResolverPaths: List<String> = emptyList(),
+    val workingResolverPaths: List<String> = emptyList(),
     val rejectedResolverEntries: List<String> = emptyList(),
     val workerFailures: List<String> = emptyList(),
 ) {
@@ -637,6 +639,7 @@ data class WhiteDnsScanState(
         }
         return copy(
             status = WhiteDnsScanStatus.Stopped,
+            testingResolverPaths = emptyList(),
             updatedAtMillis = nowMillis,
             message = message,
         )

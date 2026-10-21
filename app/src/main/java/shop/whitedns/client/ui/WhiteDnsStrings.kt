@@ -140,6 +140,8 @@ interface WhiteDnsStrings {
     val scanLabelStatus: String
     val scanLabelSource: String
     val scanLabelWorkers: String
+    val scanTestingPaths: String
+    val scanWorkingPaths: String
     val scanLabelProgress: String
     val scanAutoSave: String
 
@@ -844,6 +846,8 @@ object EnglishStrings : WhiteDnsStrings {
     override val scanLabelStatus = "Status"
     override val scanLabelSource = "Source"
     override val scanLabelWorkers = "Workers"
+    override val scanTestingPaths = "Testing DNS paths"
+    override val scanWorkingPaths = "Working DNS paths"
     override val scanLabelProgress = "Progress"
     override val scanAutoSave = "Auto-save results"
 
@@ -1518,6 +1522,8 @@ object PersianStrings : WhiteDnsStrings {
     override val scanLabelStatus = "وضعیت"
     override val scanLabelSource = "منبع"
     override val scanLabelWorkers = "ورکرها"
+    override val scanTestingPaths = "مسیرهای در حال آزمون"
+    override val scanWorkingPaths = "مسیرهای قابل استفاده"
     override val scanLabelProgress = "پیشرفت"
     override val scanAutoSave = "ذخیره خودکار نتایج"
 

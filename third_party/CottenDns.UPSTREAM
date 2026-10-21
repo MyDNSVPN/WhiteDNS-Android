@@ -1,4 +1,4 @@
 repository=https://github.com/WhiteDNS/CottenDNS
-base_commit=4de16d2b2d4283f7b3320236f352e5c1cbf64674
-commit=4de16d2b2d4283f7b3320236f352e5c1cbf64674
+base_commit=0f1d6f0eb34eb4490520ea448bb1397df38b775a
+commit=0f1d6f0eb34eb4490520ea448bb1397df38b775a
 source_snapshot=third_party/CottenDns/COTTEN_CORE_SNAPSHOT.json

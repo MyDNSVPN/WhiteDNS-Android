@@ -189,6 +189,8 @@ class WhiteDnsScanService : Service() {
                 durationMillis = System.currentTimeMillis() - startedAtMillis,
                 message = message,
                 validResolverEntries = validEntries,
+                testingResolverPaths = if (status == WhiteDnsScanStatus.Running) workerStats.flatMap { it.paths.testingPaths } else emptyList(),
+                workingResolverPaths = workerStats.flatMap { it.paths.workingPaths }.distinct(),
                 rejectedResolverEntries = rejectedEntries,
                 workerFailures = workerFailures.toList(),
             )
@@ -259,6 +261,7 @@ class WhiteDnsScanService : Service() {
                     }
                     synchronized(stateLock) {
                         workerFailures += "Worker ${workerInput.id}: ${error.message ?: error::class.java.simpleName}"
+                        workerStats[index].paths.clearTesting()
                     }
                     publishAggregate(WhiteDnsScanStatus.Running, "Worker ${workerInput.id} failed", true)
                     false
@@ -318,6 +321,10 @@ class WhiteDnsScanService : Service() {
         }
 
         when (val telemetry = parseCottenDnsScanLine(line)) {
+            is CottenDnsScanTelemetry.Testing, is CottenDnsScanTelemetry.Path -> {
+                synchronized(stateLock) { workerStats[workerIndex].paths.update(telemetry) }
+                publishAggregate(WhiteDnsScanStatus.Running, "Testing DNS paths", false)
+            }
             is CottenDnsScanTelemetry.Valid -> {
                 val resolver = WhiteDnsScannerResultStore.normalizeResolverEntry(telemetry.resolver) ?: return
                 var validCount = 0
@@ -343,6 +350,7 @@ class WhiteDnsScanService : Service() {
             }
             is CottenDnsScanTelemetry.Complete -> {
                 synchronized(stateLock) {
+                    workerStats[workerIndex].paths.clearTesting()
                     workerStats[workerIndex].completed = telemetry.total
                     workerStats[workerIndex].total = telemetry.total
                     workerStats[workerIndex].valid = telemetry.valid
@@ -724,6 +732,7 @@ class WhiteDnsScanService : Service() {
     }
 
     private data class WorkerScanStats(
+        val paths: CottenDnsScanPaths = CottenDnsScanPaths(),
         var total: Int = 0,
         var completed: Int = 0,
         var valid: Int = 0,

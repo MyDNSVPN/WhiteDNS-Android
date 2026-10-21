@@ -1881,6 +1881,12 @@ private fun ScanTabContent(
                 InfoRow(label = WhiteDnsL10n.scanLabelStatus, value = scanStatusLabel(scanState.status))
                 InfoRow(label = WhiteDnsL10n.scanLabelSource, value = scanState.sourceName.ifBlank { WhiteDnsL10n.scanNoFileSelected })
                 InfoRow(label = WhiteDnsL10n.scanLabelWorkers, value = scanState.workerCount.toString())
+                if (scanState.isRunning) {
+                    InfoRow(label = WhiteDnsL10n.scanTestingPaths, value = "${scanState.testingResolverPaths.size}: " + scanState.testingResolverPaths.take(12).joinToString(" · "), multilineValue = true)
+                }
+                if (scanState.workingResolverPaths.isNotEmpty()) {
+                    InfoRow(label = WhiteDnsL10n.scanWorkingPaths, value = "${scanState.workingResolverPaths.size}: " + scanState.workingResolverPaths.take(12).joinToString(" · "), multilineValue = true)
+                }
                 InfoRow(label = WhiteDnsL10n.scanLabelProgress, value = "${scanState.completedResolvers}/${scanState.totalResolvers}")
                 if (scanState.message.isNotBlank()) {
                     InfoRow(label = WhiteDnsL10n.scanMessageLabel, value = scanState.message, multilineValue = true)

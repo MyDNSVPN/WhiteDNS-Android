@@ -254,6 +254,8 @@ object WhiteDnsL10n {
     val scanLabelStatus: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelStatus
     val scanLabelSource: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelSource
     val scanLabelWorkers: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelWorkers
+    val scanTestingPaths: String @Composable get() = LocalWhiteDnsStrings.current.scanTestingPaths
+    val scanWorkingPaths: String @Composable get() = LocalWhiteDnsStrings.current.scanWorkingPaths
     val scanLabelProgress: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelProgress
     val scanAutoSave: String @Composable get() = LocalWhiteDnsStrings.current.scanAutoSave
     val supportTitle: String @Composable get() = LocalWhiteDnsStrings.current.supportTitle

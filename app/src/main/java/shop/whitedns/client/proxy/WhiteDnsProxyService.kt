@@ -43,6 +43,7 @@ import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
 import shop.whitedns.client.runtime.formatTrafficNotificationText
 import shop.whitedns.client.runtime.parseCottenDnsTrafficStatsLine
 import shop.whitedns.client.cottendns.CottenDnsProcessManager
+import shop.whitedns.client.runtime.CottenDnsTunnelReadiness
 import shop.whitedns.client.vpn.WhiteDnsVpnService
 
 class WhiteDnsProxyService : Service() {
@@ -209,7 +210,9 @@ class WhiteDnsProxyService : Service() {
         resolvedSettings: ResolvedWhiteDnsSettings,
     ) {
         val startupFailure = AtomicReference<String?>(null)
+        val readiness = CottenDnsTunnelReadiness(serverProfile.tunnelMode, settings.engine)
         CottenDnsProcessManager.start(serverProfile, settings) { line ->
+            readiness.observe(line)
             logInfo(line)
             detectCottenDnsStartupFailure(line)?.let { failure ->
                 startupFailure.compareAndSet(null, failure)
@@ -218,6 +221,7 @@ class WhiteDnsProxyService : Service() {
         waitForProxyPort(
             listenPort = resolvedSettings.listenPort,
             startupFailure = { startupFailure.get() },
+            readiness = readiness,
         )
         startHttpProxyBridge(resolvedSettings)
         WhiteDnsRuntimeStateStore.markReady(
@@ -252,8 +256,11 @@ class WhiteDnsProxyService : Service() {
     private suspend fun waitForProxyPort(
         listenPort: Int,
         startupFailure: () -> String?,
+        readiness: CottenDnsTunnelReadiness,
     ) {
+        val startedAt = android.os.SystemClock.elapsedRealtime()
         while (true) {
+            readiness.startupFailure()?.let { throw IllegalStateException(it) }
             startupFailure()?.let { failure ->
                 throw IllegalStateException("CottenDns startup failed: $failure")
             }
@@ -263,8 +270,11 @@ class WhiteDnsProxyService : Service() {
                     "CottenDns process exited before SOCKS was ready${exitCode?.let { " (exit code $it)" }.orEmpty()}",
                 )
             }
-            if (canConnectToLocalPort(listenPort)) {
+            if (canConnectToLocalPort(listenPort) && readiness.isReady()) {
                 return
+            }
+            if (readiness.required && android.os.SystemClock.elapsedRealtime() - startedAt >= 90_000L) {
+                throw IllegalStateException("CottenMax tunnel did not become ready; the local proxy alone is not a verified connection")
             }
             delay(500)
         }
