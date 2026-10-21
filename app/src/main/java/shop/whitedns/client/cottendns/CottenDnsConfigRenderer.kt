@@ -281,6 +281,8 @@ object CottenDnsConfigRenderer {
             appendLine("DOMAINS = ${domainsToml(serverProfile.domain)}")
             appendLine("DATA_ENCRYPTION_METHOD = ${serverProfile.encryptionMethod}")
             appendLine("ENCRYPTION_KEY = \"${escape(serverProfile.encryptionKey)}\"")
+            val mode = if (ConnectionProfile.normalizeServerType(serverProfile.serverType) == ConnectionProfile.ServerTypeCompatibility) "legacy" else ConnectionProfile.normalizeTunnelMode(serverProfile.tunnelMode)
+            appendLine("TUNNEL_MODE = \"$mode\"")
             appendLine("PROTOCOL_TYPE = \"${escape(resolved.protocolType)}\"")
             appendServerTypeToml(serverProfile.serverType, resolved.configPreset, resolved.transportMode, resolved.deliveryMode, resolved.qnameMode, resolved)
             appendClientSettingsToml(
@@ -296,6 +298,7 @@ object CottenDnsConfigRenderer {
                 // still gets its own shard; the engine caps the pool to the shard size.
                 mtuTestParallelismResolvers = resolved.scanResolverParallelism,
             )
+            appendCottenOptionsToml(serverProfile, mode, resolved)
         }.trimEnd()
     }
 
