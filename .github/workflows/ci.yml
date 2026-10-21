@@ -63,7 +63,7 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager \
             "platforms;android-36" \
-            "build-tools;36.0.0" \
+            "build-tools;36.1.0" \
             "ndk;${GRADLE_ANDROID_NDK_VERSION}" \
             "ndk;${CottenDns_ANDROID_NDK_VERSION}"
 
@@ -76,11 +76,8 @@ jobs:
       - name: Build vendored CottenDns native clients
         run: |
           set -euo pipefail
-          BUILD_VERSION="$(sed -n 's/^commit=//p' third_party/CottenDns.UPSTREAM)" \
-            NDK_HOST=linux-x86_64 \
-            NDK_ROOT="${ANDROID_HOME}/ndk/${CottenDns_ANDROID_NDK_VERSION}" \
-            OUTPUT_DIR="$PWD/app/src/main/jniLibs" \
-            bash third_party/CottenDns/scripts/build-android-client.sh all
+          make CottenDns SDK_ROOT="$ANDROID_HOME" NDK_HOST=linux-x86_64
+          go run scripts/cottendns-build-manifest.go verify
 
       - name: Install scanner binding tools at vendored module versions
         working-directory: third_party/Scanner
