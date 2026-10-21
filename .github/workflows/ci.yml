@@ -82,6 +82,13 @@ jobs:
             OUTPUT_DIR="$PWD/app/src/main/jniLibs" \
             bash third_party/CottenDns/scripts/build-android-client.sh all
 
+      - name: Install scanner binding tools at vendored module versions
+        working-directory: third_party/Scanner
+        run: |
+          set -euo pipefail
+          go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       - name: Run unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 
