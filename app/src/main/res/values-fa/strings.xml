@@ -63,7 +63,6 @@
     <string name="cd_dropdown_encryption_method">منوی کشویی روش رمزنگاری</string>
     <string name="cd_dropdown_connection_profile">منوی کشویی پروفایل اتصال</string>
     <string name="cd_dropdown_resolver_profile">منوی کشویی پروفایل ریزالور</string>
-    <string name="cd_dropdown_advanced_settings">منوی کشویی تنظیمات پیشرفته</string>
     <string name="cd_dropdown_log_level">منوی کشویی سطح لاگ</string>
     <string name="cd_dropdown_dns_mode">منوی کشویی حالت DNS</string>
 
@@ -222,6 +221,7 @@
     <string name="cd_menu_button">باز کردن منوی برنامه</string>
     <string name="cd_copy_address">کپی %1$s به کلیپ‌بورد</string>
     <string name="cd_enable_vpn_notification">فعال کردن مجوز اعلان VPN</string>
+    <string name="cd_notification_settings">باز کردن تنظیمات اعلان‌ها</string>
     <string name="cd_allow_background_vpn">اجازه اجرای WhiteDNS در پس‌زمینه</string>
     <string name="cd_split_tunnel_app_toggle">تغییر وضعیت %1$s در تونل اسپلیت</string>
     <string name="cd_stat_card_detail">%1$s: %2$s، ضربه برای جزئیات</string>

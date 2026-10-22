@@ -135,3 +135,13 @@ WhiteDNS 1.6.7 adds client scheduling and query-size adaptation changes; these
 are WhiteDNS modifications to Lantern code, documented in
 `soar-engine/third_party/soar/WHITEDNS_CHANGES.md`. The upstream author and license
 remain unchanged.
+
+## Vazirmatn fonts
+
+Source: https://github.com/rastikerdar/vazirmatn
+
+Copyright 2015 The Vazirmatn Project Authors.
+
+The bundled regular and bold fonts use the SIL Open Font License 1.1. The full
+license is included in the APK as `assets/vazirmatn-OFL.txt` and in this repository
+as `third_party/fonts/vazirmatn/OFL.txt`.

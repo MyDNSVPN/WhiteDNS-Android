@@ -654,20 +654,20 @@ object EnglishStrings : WhiteDnsStrings {
     override val tabScan = "Scan"
     override val tabLogs = "Logs"
 
-    override val btnConnect = "CONNECT"
-    override val btnConnecting = "CONNECTING"
-    override val btnStop = "STOP"
+    override val btnConnect = "Connect"
+    override val btnConnecting = "Connecting"
+    override val btnStop = "Stop"
 
-    override val btnClose = "CLOSE"
-    override val btnSave = "SAVE"
-    override val btnCancel = "CANCEL"
-    override val btnCreate = "CREATE"
-    override val btnImport = "IMPORT"
-    override val btnDelete = "DELETE"
-    override val btnCopy = "COPY"
-    override val btnShare = "SHARE"
+    override val btnClose = "Close"
+    override val btnSave = "Save"
+    override val btnCancel = "Cancel"
+    override val btnCreate = "Create"
+    override val btnImport = "Import"
+    override val btnDelete = "Delete"
+    override val btnCopy = "Copy"
+    override val btnShare = "Share"
 
-    override val appSettingsTitle = "APP SETTINGS"
+    override val appSettingsTitle = "App settings"
     override val fieldTheme = "Theme"
     override val fieldLanguage = "Language"
     override val themeModeAuto = "Auto"
@@ -682,21 +682,21 @@ object EnglishStrings : WhiteDnsStrings {
     override val sectionConnection = "Connection"
     override val sectionResolver = "Resolver"
 
-    override val bannerBatteryTitle = "BACKGROUND VPN MAY STOP"
+    override val bannerBatteryTitle = "Background VPN may stop"
     override val bannerBatteryBody = "Allow WhiteDNS to ignore battery optimization so the VPN keeps running after you leave the app."
-    override val bannerAllowBackground = "ALLOW BACKGROUND VPN"
-    override val bannerNotificationTitle = "VPN NOTIFICATION DISABLED"
+    override val bannerAllowBackground = "Allow background VPN"
+    override val bannerNotificationTitle = "VPN notification disabled"
     override val bannerNotificationBody = "Enable VPN notification to keep the connection stable in the background."
-    override val bannerEnableNotification = "ENABLE VPN NOTIFICATION"
-    override val bannerVpnWarningTitle = "FULL VPN PERFORMANCE WARNING"
+    override val bannerEnableNotification = "Enable VPN notification"
+    override val bannerVpnWarningTitle = "Full VPN performance warning"
     override val bannerVpnWarningBody = "Full VPN mode may affect performance. Proxy mode is recommended for most users."
 
     override val parallelTest = "Parallel Test"
     override val connectProgressConnected = "Connected"
-    override val serverTestTitle = "SERVER TEST"
-    override val serverTestButton = "TEST SERVERS"
+    override val serverTestTitle = "Server test"
+    override val serverTestButton = "Test servers"
     override val serverTestSingleButton = "Test server"
-    override val serverTestRunning = "TESTING"
+    override val serverTestRunning = "Testing"
     override val serverTestIdle = "Ready to test saved servers"
     override val serverTestReady = "Ready"
     override val serverTestFailed = "Failed"
@@ -723,7 +723,7 @@ object EnglishStrings : WhiteDnsStrings {
     override val profileTabResolver = "Resolver"
     override val profileTabSetting = "Setting"
 
-    override val settingGuideTitle = "SETTING PROFILE GUIDE"
+    override val settingGuideTitle = "Setting profile guide"
     override val settingGuideIntro = "Setting profiles change how the MasterDNS/StormDNS client behaves after you choose a connection and resolver list. Most values are MasterDNS/StormDNS client_config.toml runtime knobs; Android-only helpers are marked by WhiteDNS behavior."
     override val settingGuideSource = "Based on MasterDNS/StormDNS client_config.toml and WhiteDNS runtime behavior."
     override val settingGuideEffectLabel = "Effect"
@@ -870,18 +870,18 @@ object EnglishStrings : WhiteDnsStrings {
     override val resolverNotSelected = "No resolver selected"
     override val resolverRequired = "A resolver is required to connect."
 
-    override val logsTitle = "CONNECTION LOGS"
-    override val logsClear = "CLEAR"
-    override val logsCopy = "COPY"
+    override val logsTitle = "Connection logs"
+    override val logsClear = "Clear"
+    override val logsCopy = "Copy"
     override val logsEmptyTitle = "No connection activity yet"
     override val logsEmptyBody = "Connect WhiteDNS to see runtime events here. Diagnostics are available at any time."
 
-    override val scanBtnStart = "START"
-    override val scanBtnStop = "STOP"
-    override val scanBtnSaveAs = "SAVE AS"
-    override val scanBtnResume = "RESUME"
+    override val scanBtnStart = "Start"
+    override val scanBtnStop = "Stop"
+    override val scanBtnSaveAs = "Save as"
+    override val scanBtnResume = "Resume"
     override val scanWorkerWarning = "High worker count may affect device performance."
-    override val scanStatusTitle = "SCAN STATUS"
+    override val scanStatusTitle = "Scan status"
     override val scanLabelTotal = "Total"
     override val scanLabelValid = "Valid"
     override val scanLabelRejected = "Rejected"
@@ -893,15 +893,15 @@ object EnglishStrings : WhiteDnsStrings {
 
     override val serverRouteMissing = "Server route not available"
 
-    override val supportTitle = "SUPPORT WHITEDNS"
-    override val supportBody = "WhiteDNS is free and open source. If you find it useful, consider supporting development."
+    override val supportTitle = "Support WhiteDNS"
+    override val supportBody = "If you find WhiteDNS useful, consider supporting its development."
 
     // Scan tab additional
-    override val scanDefaultList = "DEFAULT LIST"
-    override val scanSelectFile = "SELECT FILE"
+    override val scanDefaultList = "Default list"
+    override val scanSelectFile = "Select file"
     override val scanProfileLabel = "Scan Profile"
-    override val scanAutoSaveTitle = "SCAN AUTO SAVE"
-    override val scanSaveAsTitle = "SAVE SCAN RESULTS"
+    override val scanAutoSaveTitle = "Scan auto save"
+    override val scanSaveAsTitle = "Save scan results"
     override val scanSaveAsName = "Name"
     override val scanSaveAsPlaceholder = "Fast Tunnel"
     override val scanNoFileSelected = "No file selected"
@@ -912,10 +912,10 @@ object EnglishStrings : WhiteDnsStrings {
     override val setupAddConnectionSupportingText = "Server domain and key"
     override val setupAddResolverSupportingText = "DNS resolver list"
     override val setupManualResolvers = "Manual resolvers"
-    override val setupSectionSetup = "SETUP"
+    override val setupSectionSetup = "Setup"
 
     // Connection info card
-    override val infoCardConnection = "CONNECTION INFO"
+    override val infoCardConnection = "Connection info"
     override val infoLabelMode = "Mode"
     override val infoLabelSocks5Proxy = "SOCKS5 Proxy"
     override val infoLabelHttpProxy = "HTTP Proxy"
@@ -944,20 +944,20 @@ object EnglishStrings : WhiteDnsStrings {
     override val backgroundScanningInProgress = "Background scanning in progress"
 
     // Profile dialogs
-    override val profileDialogCreateSetting = "CREATE SETTING PROFILE"
-    override val profileDialogEditSetting = "EDIT SETTING PROFILE"
-    override val profileDialogCreateResolver = "CREATE RESOLVER PROFILE"
-    override val profileDialogEditResolver = "EDIT RESOLVER PROFILE"
-    override val profileDialogCreateConnection = "CREATE NEW CONNECTION"
-    override val profileDialogEditConnection = "EDIT CONNECTION"
-    override val profileDialogImportSettings = "IMPORT SETTINGS PROFILE"
-    override val profileDialogImportConnection = "IMPORT CONNECTION"
-    override val profileDialogExportConnection = "EXPORT CONNECTION"
-    override val profileDialogExportAllConnections = "EXPORT ALL CONNECTIONS"
-    override val profileDialogExportAllResolvers = "EXPORT ALL RESOLVERS"
-    override val profileDialogExportSettings = "EXPORT SETTINGS"
+    override val profileDialogCreateSetting = "Create setting profile"
+    override val profileDialogEditSetting = "Edit setting profile"
+    override val profileDialogCreateResolver = "Create resolver profile"
+    override val profileDialogEditResolver = "Edit resolver profile"
+    override val profileDialogCreateConnection = "Create new connection"
+    override val profileDialogEditConnection = "Edit connection"
+    override val profileDialogImportSettings = "Import settings profile"
+    override val profileDialogImportConnection = "Import connection"
+    override val profileDialogExportConnection = "Export connection"
+    override val profileDialogExportAllConnections = "Export all connections"
+    override val profileDialogExportAllResolvers = "Export all resolvers"
+    override val profileDialogExportSettings = "Export settings"
     override val profileExportResolverTotalTemplate = "Total: %s"
-    override val profileExportSavingFile = "Saving client_resolvers.txt..."
+    override val profileExportSavingFile = "Saving resolver list…"
     override val profileExportSavedToTemplate = "Saved to %s"
     override val profileFieldName = "Name"
     override val profileFieldResolvers = "Resolvers"
@@ -990,8 +990,8 @@ object EnglishStrings : WhiteDnsStrings {
     override val cottenTransportDot = "DoT (TLS, falls back to UDP/TCP)"
     override val cottenTransportDoh = "DoH (HTTPS, falls back to UDP/TCP)"
     override val cottenDeliveryTxt = "TXT only"
-    override val cottenDeliveryTxtCname = "TXT + CNAME"
-    override val cottenDeliveryTxtHttps = "TXT + HTTPS"
+    override val cottenDeliveryTxtCname = "Txt + cname"
+    override val cottenDeliveryTxtHttps = "Txt + HTTPS"
     override val cottenDeliveryTxtAaaa = "TXT + AAAA (IPv6)"
     override val cottenDeliveryAll = "All (TXT / CNAME / NULL / HTTPS / AAAA)"
     override val cottenIpAuto = "Auto (IPv4, IPv6 fallback)"
@@ -1038,19 +1038,19 @@ object EnglishStrings : WhiteDnsStrings {
     override val profileQrUnavailable = "QR code unavailable for this profile link."
 
     // Profile action buttons
-    override val profileBtnCreate = "CREATE"
-    override val profileBtnImport = "IMPORT"
-    override val profileBtnDeleteDups = "DELETE DUPS"
-    override val profileBtnExportAll = "EXPORT ALL"
-    override val profileBtnSaveCurrent = "SAVE CURRENT"
-    override val profileBtnImportFile = "IMPORT FILE"
-    override val profileBtnClear = "CLEAR"
+    override val profileBtnCreate = "Create"
+    override val profileBtnImport = "Import"
+    override val profileBtnDeleteDups = "Delete dups"
+    override val profileBtnExportAll = "Export all"
+    override val profileBtnSaveCurrent = "Save current"
+    override val profileBtnImportFile = "Import file"
+    override val profileBtnClear = "Clear"
 
     // Delete confirmation dialogs
-    override val deleteConnectionTitle = "DELETE CONNECTION"
-    override val deleteResolverTitle = "DELETE RESOLVER PROFILE"
-    override val deleteSettingTitle = "DELETE SETTING PROFILE"
-    override val deleteDupsTitle = "DELETE DUPLICATE RESOLVERS"
+    override val deleteConnectionTitle = "Delete connection"
+    override val deleteResolverTitle = "Delete resolver profile"
+    override val deleteSettingTitle = "Delete setting profile"
+    override val deleteDupsTitle = "Delete duplicate resolvers"
 
     // GroupLabels
     override val groupMtu = "MTU"
@@ -1114,28 +1114,28 @@ object EnglishStrings : WhiteDnsStrings {
     override val settingSettingLabel = "Setting"
 
     // Split Tunnel
-    override val splitTunnelTitle = "SPLIT TUNNEL"
+    override val splitTunnelTitle = "Split tunnel"
     override val splitTunnelAppRouting = "App Routing"
     override val splitTunnelSelected = "Selected"
-    override val splitTunnelSelectApps = "SELECT APPS"
+    override val splitTunnelSelectApps = "Select apps"
     override val splitTunnelNoAppsFound = "No apps found."
     override val splitTunnelSearchPlaceholder = "Search apps"
-    override val splitTunnelDialogTitle = "SELECT APPS"
+    override val splitTunnelDialogTitle = "Select apps"
     override val splitTunnelSearchLabel = "Search"
 
     // Connection logs (inline panel)
-    override val logsInlineTitle = "CONNECTION LOGS"
-    override val logsDiagnostics = "DIAGNOSTICS"
+    override val logsInlineTitle = "Connection logs"
+    override val logsDiagnostics = "Diagnostics"
 
     // Notification permission banner
-    override val bannerNotificationBlockedTitle = "VPN NOTIFICATION BLOCKED"
+    override val bannerNotificationBlockedTitle = "VPN notification blocked"
     override val bannerNotificationBlockedBody = "WhiteDNS needs permission to show notifications so the VPN stays running. Tap below to grant permission."
-    override val bannerFullVpnWarningTitle = "FULL VPN PERFORMANCE WARNING"
+    override val bannerFullVpnWarningTitle = "Full VPN performance warning"
     override val bannerFullVpnWarningBody = "Full VPN mode routes all device traffic through WhiteDNS. This may increase latency and battery usage compared to Proxy mode."
 
     // Parallel test UI
-    override val parallelTestOpenLabel = "Parallel Test ▲"
-    override val parallelTestClosedLabel = "Parallel Test ▼"
+    override val parallelTestOpenLabel = "Parallel Test"
+    override val parallelTestClosedLabel = "Parallel Test"
     override val parallelTestDescription = "Select configs to test in parallel. The fastest config will be selected automatically."
     override val parallelTestYourConfigs = "Your configs"
 
@@ -1144,7 +1144,7 @@ object EnglishStrings : WhiteDnsStrings {
     override val connectSelectedCount = "Selected"
 
     // Auto-tune / parallel test results
-    override val autoTuneSaveSettingAs = "SAVE SETTING AS"
+    override val autoTuneSaveSettingAs = "Save setting as"
     override val autoTuneMtuFail = "Fail"
     override val autoTuneMtuPass = "Pass"
     override val autoTuneMtuTest = "Test"
@@ -1186,7 +1186,7 @@ object EnglishStrings : WhiteDnsStrings {
     override val balancingStrategyRoundRobin = "Round Robin"
     override val balancingStrategyLeastLoss = "Least Loss"
     override val balancingStrategyLowestLatency = "Lowest Latency"
-    override val compressionOff = "OFF"
+    override val compressionOff = "Off"
     override val compressionZstd = "ZSTD"
     override val compressionLz4 = "LZ4"
     override val compressionZlib = "ZLIB"
@@ -1201,11 +1201,11 @@ object EnglishStrings : WhiteDnsStrings {
     override val encryptionMethodAes256 = "AES-256-GCM"
 
     // Download TOML dialog
-    override val downloadTomlTitle = "DOWNLOAD TOML"
-    override val downloadTomlBtn = "DOWNLOAD TOML"
+    override val downloadTomlTitle = "Download TOML"
+    override val downloadTomlBtn = "Download TOML"
 
     // Save setting as button
-    override val saveSettingAs = "SAVE SETTING AS"
+    override val saveSettingAs = "Save setting as"
 
     // Validation messages
     override val validationEnterResolverIp = "Enter resolver IP or domain"
@@ -1258,13 +1258,13 @@ object EnglishStrings : WhiteDnsStrings {
     override val profileEncryptionKeyPlaceholder = "32-character key"
     override val profileMyStormDnsPlaceholder = "My StormDNS"
     override val profileDomainFallback = "Custom StormDNS"
-    override val profileStatusActive = "ACTIVE"
-    override val profileStatusSelected = "SELECTED"
-    override val profileStatusModified = "MODIFIED"
+    override val profileStatusActive = "Active"
+    override val profileStatusSelected = "Selected"
+    override val profileStatusModified = "Modified"
     override fun resolverProfileSummary(count: Int): String =
         "$count resolver${if (count == 1) "" else "s"}"
     override val profileFieldProfileLinkSingle = "Profile Link"
-    override val dialogDeleteConfirm = "DELETE"
+    override val dialogDeleteConfirm = "Delete"
     override val deleteConnectionMessageTemplate = "Delete this connection profile? This cannot be undone."
     override val deleteResolverMessageTemplate = "Delete this resolver profile? This cannot be undone."
     override val deleteSettingMessageTemplate = "Delete this setting profile? This cannot be undone."
@@ -1309,10 +1309,10 @@ object EnglishStrings : WhiteDnsStrings {
     override val splitTunnelOnlyPrefix = "Only"
     override val splitTunnelBypassPrefix = "Bypass"
 
-    override val tapToCollapse = "TAP TO COLLAPSE"
-    override val tapToConfigure = "TAP TO CONFIGURE"
-    override val parallelTestOpen = "OPEN"
-    override val parallelTestClosed = "CLOSED"
+    override val tapToCollapse = "Tap to collapse"
+    override val tapToConfigure = "Tap to configure"
+    override val parallelTestOpen = "Open"
+    override val parallelTestClosed = "Closed"
 
     override val appsSearchPlaceholder = "App name or package"
 
@@ -1364,7 +1364,7 @@ object EnglishStrings : WhiteDnsStrings {
     override val noResolverEntriesError = "No resolver entries found in file"
 
     override val profileImportSuccess = "Profile imported"
-    override val profileBtnScanQr = "SCAN QR"
+    override val profileBtnScanQr = "Scan QR"
     override val qrScanNoCode = "No WhiteDNS QR profile found"
     override val qrScanCancelled = "QR scan cancelled"
 
@@ -1616,7 +1616,7 @@ object PersianStrings : WhiteDnsStrings {
     override val serverRouteMissing = "مسیر سرور در دسترس نیست"
 
     override val supportTitle = "حمایت از WHITEDNS"
-    override val supportBody = "WhiteDNS رایگان و متن‌باز است. اگر مفید بود، از توسعه آن حمایت کنید."
+    override val supportBody = "اگر WhiteDNS برایتان مفید است، از توسعهٔ آن حمایت کنید."
 
     // Scan tab additional
     override val scanDefaultList = "لیست پیش‌فرض"
@@ -1679,7 +1679,7 @@ object PersianStrings : WhiteDnsStrings {
     override val profileDialogExportAllResolvers = "خروجی همه ریزالورها"
     override val profileDialogExportSettings = "خروجی تنظیمات"
     override val profileExportResolverTotalTemplate = "مجموع: %s"
-    override val profileExportSavingFile = "در حال ذخیره client_resolvers.txt..."
+    override val profileExportSavingFile = "در حال ذخیرهٔ فهرست ریزالورها…"
     override val profileExportSavedToTemplate = "ذخیره شد در %s"
     override val profileFieldName = "نام"
     override val profileFieldResolvers = "ریزالورها"
@@ -1856,8 +1856,8 @@ object PersianStrings : WhiteDnsStrings {
     override val bannerFullVpnWarningBody = "حالت VPN کامل تمام ترافیک دستگاه را از طریق WhiteDNS هدایت می‌کند. این ممکن است در مقایسه با حالت پروکسی تأخیر و مصرف باتری را افزایش دهد."
 
     // Parallel test UI
-    override val parallelTestOpenLabel = "تست موازی ▲"
-    override val parallelTestClosedLabel = "تست موازی ▼"
+    override val parallelTestOpenLabel = "تست موازی"
+    override val parallelTestClosedLabel = "تست موازی"
     override val parallelTestDescription = "تنظیمات را برای تست موازی انتخاب کنید. سریع‌ترین تنظیم به‌طور خودکار انتخاب می‌شود."
     override val parallelTestYourConfigs = "تنظیمات شما"
 
