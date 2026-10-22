@@ -59,7 +59,14 @@ object StormDnsConfigRenderer {
         serverProfile: StormDnsServerProfile,
         settings: WhiteDnsSettings,
     ): String {
-        if (serverProfile.engine == DnsClientEngine.Soar) return SoarConfigRenderer.render(serverProfile, settings)
+        if (serverProfile.engine == DnsClientEngine.Soar) {
+            // The scan service controls parallelism by partitioning resolvers across
+            // processes. Each process must probe one resolver at a time.
+            return SoarConfigRenderer.render(
+                serverProfile.copy(soarSettings = serverProfile.soarSettings.copy(discoveryConcurrency = 1)),
+                settings,
+            )
+        }
         val resolved = settings.copy(
             startupMode = "resolvers",
             trafficWarmupEnabled = false,
