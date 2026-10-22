@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.junit.Assert.*
 import org.junit.Test
 import shop.whitedns.client.storm.SoarConfigRenderer
+import shop.whitedns.client.storm.StormDnsConfigRenderer
 import shop.whitedns.client.runtime.RuntimeLaunchRequest
 import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
 
@@ -78,6 +79,26 @@ class SoarIntegrationTest {
         assertFalse(json.has("ENCRYPTION_KEY"))
         assertFalse(json.has("DATA_ENCRYPTION_METHOD"))
         assertTrue(json.getString("listen").startsWith("127.0.0.1:"))
+    }
+
+    @Test fun scanWorkersProbeOneResolverEachWithoutChangingConnectionDiscovery() {
+        for (concurrency in listOf(2, 16)) {
+            val p = profile()
+            val options = p.soarSettings.copy(discoveryConcurrency = concurrency)
+            val server = StormDnsServerProfile(
+                p.id, p.name, p.customServerDomain, publicKey, 0,
+                engine = DnsClientEngine.Soar, soarSettings = options,
+            )
+            val scan = JSONObject(StormDnsConfigRenderer.renderScanClientToml(server, settings()))
+            val connection = JSONObject(StormDnsConfigRenderer.renderClientToml(server, settings()))
+
+            assertEquals(1, scan.getJSONObject("soar").getInt("discoveryConcurrency"))
+            assertEquals(options.copy(discoveryConcurrency = 1),
+                soarProfileSettingsFromJson(scan.getJSONObject("soar")))
+            assertEquals(options, soarProfileSettingsFromJson(connection.getJSONObject("soar")))
+            assertEquals(options, server.soarSettings)
+            assertEquals(publicKey, scan.getString("server_public_key"))
+        }
     }
 
     @Test fun soarImportBindsPortableResolversWithoutReplacingLegacyList() {
