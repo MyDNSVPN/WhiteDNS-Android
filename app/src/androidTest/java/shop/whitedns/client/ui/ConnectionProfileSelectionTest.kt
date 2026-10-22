@@ -36,7 +36,7 @@ class ConnectionProfileSelectionTest {
                     ConnectionProfilesSettings(
                         settings = settings.value, activeConnectionProfileId = null,
                         connectionStatus = status, serverTestState = ServerTestState(),
-                        openCreateRequestId = 0, onServerTestClick = {},
+                        onServerTestClick = {},
                         onSettingsChange = { settings.value = it },
                         onImportProfiles = { _, _ -> Result.success(Unit) },
                         onRefreshSubscriptions = { Result.success(Unit) },

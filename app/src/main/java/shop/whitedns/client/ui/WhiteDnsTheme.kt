@@ -1,34 +1,36 @@
-/*
- * Hallmark · pre-emit critique: P5 H4 E4 S5 R5 V4
- * macrostructure: Workbench · genre: modern-minimal · theme: WhiteDNS
- * tone: technical · anchor hue: indigo
- * contrast: pass (40–41) · nav: native bottom · footer: none · slop: pass (42–45)
- * honest: pass (46) · chrome: pass (47) · tokens: pass (48) · icons: pass (30)
- * responsive: pass (34, 49) · mobile: pass (34, 49, 50–57)
- */
 package shop.whitedns.client.ui
 
 import android.app.Activity
+import android.content.res.Configuration
+import android.view.ContextThemeWrapper
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -47,17 +49,18 @@ object WhiteDnsSpacing {
 
     val cardPadding = 16.dp
     val sectionSpacing = 24.dp
-    val inputSpacing = 12.dp
+    val inputSpacing = 8.dp
     val listItemSpacing = 8.dp
     val iconSpacing = 8.dp
 }
 
 object WhiteDnsLayout {
-    val contentMaxWidth = 560.dp
-    val screenHorizontalPadding = 16.dp
+    val contentMaxWidth = 520.dp
+    val screenHorizontalPadding: Dp
+        @Composable get() = if (LocalConfiguration.current.screenWidthDp < 600) 16.dp else 24.dp
     val minimumTouchTarget = 48.dp
     val controlHeight = 48.dp
-    val navigationItemHeight = 56.dp
+    val navigationItemHeight = 48.dp
     val connectButtonCompact = 120.dp
     val connectButtonRegular = 132.dp
     val connectRingCompact = 148.dp
@@ -65,9 +68,9 @@ object WhiteDnsLayout {
 }
 
 object WhiteDnsRadii {
-    val control = 10.dp
-    val card = 14.dp
-    val dialog = 20.dp
+    val control = 8.dp
+    val card = 22.dp
+    val dialog = 24.dp
 }
 
 object WhiteDnsAnimations {
@@ -95,6 +98,13 @@ object WhiteDnsAnimations {
 }
 
 interface WhiteDnsPaletteColors {
+    val Neutral: Color
+    val OnProminent: Color
+    val OnStateFill: Color
+    val AccentGradientEnd: Color
+    val WarningGradientStart: Color
+    val WarningGradientEnd: Color
+
     val Background: Color
     val Surface: Color
     val SurfaceAlt: Color
@@ -114,6 +124,7 @@ interface WhiteDnsPaletteColors {
     val WarningText: Color
     val Ink: Color
     val Muted: Color
+    val Tertiary: Color
     val Pale: Color
     val SectionTitle: Color
     val FieldLabel: Color
@@ -127,70 +138,88 @@ interface WhiteDnsPaletteColors {
     val ErrorSurface: Color
 }
 
+// Exact role values from WhiteVPN DashboardViews.kt / WhiteDnsDesignTokens.
 object WhiteDnsPaletteDark : WhiteDnsPaletteColors {
-    override val Background = Color(0xFF0A0C10)
-    override val Surface = Color(0xFF13161D)
-    override val SurfaceAlt = Color(0xFF0E1117)
-    override val DropdownSurface = Color(0xFF1A1E28)
-    override val Input = Color(0xFF0E1117)
-    override val Border = Color(0xFF1C2028)
-    override val Divider = Color(0xFF22273A)
-    override val ControlBorder = Color(0xFF5D6780)
-    override val Accent = Color(0xFF7264E1)
-    override val AccentPressed = Color(0xFF6456D6)
-    override val AccentText = Color(0xFF8A7FED)
-    override val AccentDim = Color(0xFF5547C2)
-    override val OnAccent = Color(0xFFFFFFFF)
-    override val Success = Color(0xFF10D98E)
-    override val Error = Color(0xFFFF5757)
-    override val Warning = Color(0xFFFFC043)
-    override val WarningText = Color(0xFFFFC043)
-    override val Ink = Color(0xFFF2F3F7)
-    override val Muted = Color(0xFFB8BED6)
-    override val Pale = Color(0xFF9BA3C4)
-    override val SectionTitle = Color(0xFFD4D7E3)
-    override val FieldLabel = Color(0xFFBFC4D8)
-    override val Description = Color(0xFF9FA6C0)
-    override val Placeholder = Color(0xFF7A8299)
-    override val Disabled = Color(0xFF5A6178)
-    override val SurfaceHover = Color(0xFF181D27)
-    override val AccentSurface = Color(0xFF1A1640)
-    override val SuccessSurface = Color(0xFF0A2D20)
-    override val WarningSurface = Color(0xFF2A2310)
-    override val ErrorSurface = Color(0xFF331818)
+    override val Neutral = Color(0xFF89968F)
+    override val OnProminent = Color(0xFF020705)
+    override val OnStateFill = Color(0xFFF4FAF7)
+    override val AccentGradientEnd = Color(0xFF71CDA7)
+    override val WarningGradientStart = Color(0xFFF0B96B)
+    override val WarningGradientEnd = Color(0xFFD99A35)
+
+    override val Background = Color(0xFF050E09)
+    override val Surface = Color(0xFF09140F)
+    override val SurfaceAlt = Color(0xFF0F1B16)
+    override val DropdownSurface = Color(0xFF15231D)
+    override val Input = Color(0xFF09140F)
+    override val Border = Color(0xFF273730)
+    override val Divider = Color(0xFF1B2A23)
+    override val ControlBorder = Color(0xFF273730)
+    override val Accent = Color(0xFF3FBE90)
+    override val AccentPressed = Color(0xFF71CDA7)
+    override val AccentText = Color(0xFF3FBE90)
+    override val AccentDim = Color(0xFF1F634A)
+    override val OnAccent = Color(0xFF02130C)
+    override val Success = Color(0xFF3FBE90)
+    override val Error = Color(0xFFF07F77)
+    override val Warning = Color(0xFFE8AA4E)
+    override val WarningText = Color(0xFFE4EEE9)
+    override val Ink = Color(0xFFE4EEE9)
+    override val Muted = Color(0xFF9BA8A2)
+    override val Tertiary = Color(0xFF717E78)
+    override val Pale = Color(0xFF9BA8A2)
+    override val SectionTitle = Color(0xFFE4EEE9)
+    override val FieldLabel = Color(0xFF9BA8A2)
+    override val Description = Color(0xFF9BA8A2)
+    override val Placeholder = Color(0xFF9BA8A2)
+    override val Disabled = Color(0xFF89968F)
+    override val SurfaceHover = Color(0xFF15231D)
+    override val AccentSurface = Color(0xFF09251A)
+    override val SuccessSurface = Color(0xFF09251A)
+    override val WarningSurface = Color(0xFF3F2903)
+    override val ErrorSurface = Color(0xFF442321)
 }
 
+// Exact role values from WhiteVPN DashboardViews.kt / WhiteDnsDesignTokens.
 object WhiteDnsPaletteLight : WhiteDnsPaletteColors {
-    override val Background = Color(0xFFF5F6FA)
-    override val Surface = Color(0xFFFFFFFF)
-    override val SurfaceAlt = Color(0xFFF8F9FC)
-    override val DropdownSurface = Color(0xFFFAFBFD)
-    override val Border = Color(0xFFE5E8F0)
-    override val Divider = Color(0xFFDCE0EB)
-    override val ControlBorder = Color(0xFF858DA3)
-    override val Accent = Color(0xFF6C5CE7)
-    override val AccentPressed = Color(0xFF5A4BD1)
-    override val AccentText = Color(0xFF5546C8)
-    override val OnAccent = Color(0xFFFFFFFF)
-    override val Success = Color(0xFF007A55)
-    override val Error = Color(0xFFB4232F)
-    override val Warning = Color(0xFF9C5E00)
-    override val WarningText = Color(0xFF9C5E00)
-    override val Ink = Color(0xFF0F1419)
-    override val Muted = Color(0xFF4B5563)
-    override val Pale = Color(0xFF6B7280)
-    override val SectionTitle = Color(0xFF374151)
-    override val FieldLabel = Color(0xFF4B5563)
-    override val Description = Color(0xFF6B7280)
-    override val Placeholder = Color(0xFF6B7280)
-    override val Disabled = Color(0xFFD1D5DB)
-    override val Input = Color(0xFFFAFBFC)
-    override val AccentDim = Color(0xFF9F93E8)
-    override val SurfaceHover = Color(0xFFF3F4F8)
-    override val AccentSurface = Color(0xFFF0EDFC)
-    override val SuccessSurface = Color(0xFFE6F7F1)
-    override val WarningSurface = Color(0xFFFEF3E2)
-    override val ErrorSurface = Color(0xFFFEE8E9)
+    override val Neutral = Color(0xFF394640)
+    override val OnProminent = Color(0xFFF4FAF7)
+    override val OnStateFill = Color(0xFFF4FAF7)
+    override val AccentGradientEnd = Color(0xFF4BAE87)
+    override val WarningGradientStart = Color(0xFFE8AA4E)
+    override val WarningGradientEnd = Color(0xFFC37F00)
+
+    override val Background = Color(0xFFF1F9F5)
+    override val Surface = Color(0xFFF8FDFB)
+    override val SurfaceAlt = Color(0xFFECF6F1)
+    override val DropdownSurface = Color(0xFFE0EDE7)
+    override val Input = Color(0xFFF8FDFB)
+    override val Border = Color(0xFFB9C8C1)
+    override val Divider = Color(0xFFD3E2DB)
+    override val ControlBorder = Color(0xFFB9C8C1)
+    override val Accent = Color(0xFF007E50)
+    override val AccentPressed = Color(0xFF4BAE87)
+    override val AccentText = Color(0xFF007E50)
+    override val AccentDim = Color(0xFF73B598)
+    override val OnAccent = Color(0xFFF4FAF7)
+    override val Success = Color(0xFF007E50)
+    override val Error = Color(0xFFCF4040)
+    override val Warning = Color(0xFFD08B00)
+    override val WarningText = Color(0xFF0A1410)
+    override val Ink = Color(0xFF0A1410)
+    override val Muted = Color(0xFF495650)
+    override val Tertiary = Color(0xFF717E78)
+    override val Pale = Color(0xFF495650)
+    override val SectionTitle = Color(0xFF0A1410)
+    override val FieldLabel = Color(0xFF495650)
+    override val Description = Color(0xFF495650)
+    override val Placeholder = Color(0xFF495650)
+    override val Disabled = Color(0xFF394640)
+    override val SurfaceHover = Color(0xFFE0EDE7)
+    override val AccentSurface = Color(0xFFD6EFE3)
+    override val SuccessSurface = Color(0xFFD6EFE3)
+    override val WarningSurface = Color(0xFFFCE4C4)
+    override val ErrorSurface = Color(0xFFFFDEDB)
 }
 
 private val LocalWhiteDnsPalette = staticCompositionLocalOf<WhiteDnsPaletteColors> { WhiteDnsPaletteDark }
@@ -781,6 +810,14 @@ object WhiteDnsL10n {
 }
 
 object WhiteDnsPalette {
+    val isDark: Boolean @Composable get() = LocalWhiteDnsPalette.current === WhiteDnsPaletteDark
+    val Neutral: Color @Composable get() = LocalWhiteDnsPalette.current.Neutral
+    val OnProminent: Color @Composable get() = LocalWhiteDnsPalette.current.OnProminent
+    val OnStateFill: Color @Composable get() = LocalWhiteDnsPalette.current.OnStateFill
+    val AccentGradientEnd: Color @Composable get() = LocalWhiteDnsPalette.current.AccentGradientEnd
+    val WarningGradientStart: Color @Composable get() = LocalWhiteDnsPalette.current.WarningGradientStart
+    val WarningGradientEnd: Color @Composable get() = LocalWhiteDnsPalette.current.WarningGradientEnd
+
     val Background: Color
         @Composable get() = LocalWhiteDnsPalette.current.Background
     val Surface: Color
@@ -815,6 +852,8 @@ object WhiteDnsPalette {
         @Composable get() = LocalWhiteDnsPalette.current.Ink
     val Muted: Color
         @Composable get() = LocalWhiteDnsPalette.current.Muted
+    val Tertiary: Color
+        @Composable get() = LocalWhiteDnsPalette.current.Tertiary
     val Pale: Color
         @Composable get() = LocalWhiteDnsPalette.current.Pale
     val SectionTitle: Color
@@ -853,7 +892,7 @@ private val WhiteDnsColorSchemeDark = darkColorScheme(
     onPrimary = WhiteDnsPaletteDark.OnAccent,
     primaryContainer = WhiteDnsPaletteDark.AccentPressed,
     onPrimaryContainer = WhiteDnsPaletteDark.OnAccent,
-    secondary = WhiteDnsPaletteDark.Pale,
+    secondary = WhiteDnsPaletteDark.Warning,
     onSecondary = WhiteDnsPaletteDark.Background,
     secondaryContainer = WhiteDnsPaletteDark.DropdownSurface,
     onSecondaryContainer = WhiteDnsPaletteDark.Ink,
@@ -904,7 +943,7 @@ private val WhiteDnsColorSchemeLight = lightColorScheme(
     onPrimary = WhiteDnsPaletteLight.OnAccent,
     primaryContainer = WhiteDnsPaletteLight.AccentSurface,
     onPrimaryContainer = WhiteDnsPaletteLight.AccentText,
-    secondary = WhiteDnsPaletteLight.Pale,
+    secondary = WhiteDnsPaletteLight.Warning,
     onSecondary = WhiteDnsPaletteLight.Surface,
     secondaryContainer = WhiteDnsPaletteLight.SurfaceAlt,
     onSecondaryContainer = WhiteDnsPaletteLight.Ink,
@@ -928,7 +967,7 @@ private val WhiteDnsColorSchemeLight = lightColorScheme(
     onError = WhiteDnsPaletteLight.OnAccent,
     errorContainer = WhiteDnsPaletteLight.ErrorSurface,
     onErrorContainer = WhiteDnsPaletteLight.Error,
-    scrim = Color(0x770A0C10),
+    scrim = Color(0x77050E09),
     surfaceBright = WhiteDnsPaletteLight.Surface,
     surfaceDim = WhiteDnsPaletteLight.SurfaceAlt,
     surfaceContainerLowest = WhiteDnsPaletteLight.Background,
@@ -954,7 +993,7 @@ private val WhiteDnsTypography = Typography(
     headlineMedium = TextStyle(
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
-        lineHeight = 30.sp,
+        lineHeight = 32.sp,
     ),
     headlineSmall = TextStyle(
         fontWeight = FontWeight.Bold,
@@ -963,8 +1002,8 @@ private val WhiteDnsTypography = Typography(
     ),
     titleLarge = TextStyle(
         fontWeight = FontWeight.Bold,
-        fontSize = 17.sp,
-        lineHeight = 22.sp,
+        fontSize = 18.sp,
+        lineHeight = 26.sp,
     ),
     titleMedium = TextStyle(
         fontWeight = FontWeight.Bold,
@@ -972,7 +1011,7 @@ private val WhiteDnsTypography = Typography(
         lineHeight = 20.sp,
     ),
     titleSmall = TextStyle(
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.Bold,
         fontSize = 14.sp,
         lineHeight = 19.sp,
     ),
@@ -992,46 +1031,44 @@ private val WhiteDnsTypography = Typography(
         lineHeight = 19.sp,
     ),
     labelLarge = TextStyle(
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.Bold,
         fontSize = 14.sp,
         lineHeight = 20.sp,
     ),
     labelMedium = TextStyle(
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.Normal,
         fontSize = 13.sp,
         lineHeight = 18.sp,
     ),
     labelSmall = TextStyle(
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 17.sp,
     ),
 )
 
-private val WhiteDnsPersianFontFamily = FontFamily(
-    Font(R.font.vazirmatn_ui_fd_regular, FontWeight.Normal),
-    Font(R.font.vazirmatn_ui_fd_medium, FontWeight.Medium),
-    Font(R.font.vazirmatn_ui_fd_semibold, FontWeight.SemiBold),
-    Font(R.font.vazirmatn_ui_fd_bold, FontWeight.Bold),
+private val WhiteDnsFontFamily = FontFamily(
+    Font(R.font.vazirmatn_regular, FontWeight.Normal),
+    Font(R.font.vazirmatn_bold, FontWeight.Bold),
 )
 
 private fun Typography.withFontFamily(fontFamily: FontFamily): Typography {
     return copy(
-        displayLarge = displayLarge.copy(fontFamily = fontFamily),
-        displayMedium = displayMedium.copy(fontFamily = fontFamily),
-        displaySmall = displaySmall.copy(fontFamily = fontFamily),
-        headlineLarge = headlineLarge.copy(fontFamily = fontFamily),
-        headlineMedium = headlineMedium.copy(fontFamily = fontFamily),
-        headlineSmall = headlineSmall.copy(fontFamily = fontFamily),
-        titleLarge = titleLarge.copy(fontFamily = fontFamily),
-        titleMedium = titleMedium.copy(fontFamily = fontFamily),
-        titleSmall = titleSmall.copy(fontFamily = fontFamily),
-        bodyLarge = bodyLarge.copy(fontFamily = fontFamily),
-        bodyMedium = bodyMedium.copy(fontFamily = fontFamily),
-        bodySmall = bodySmall.copy(fontFamily = fontFamily),
-        labelLarge = labelLarge.copy(fontFamily = fontFamily),
-        labelMedium = labelMedium.copy(fontFamily = fontFamily),
-        labelSmall = labelSmall.copy(fontFamily = fontFamily),
+        displayLarge = displayLarge.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        displayMedium = displayMedium.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        displaySmall = displaySmall.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        headlineLarge = headlineLarge.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        headlineMedium = headlineMedium.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        headlineSmall = headlineSmall.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        titleLarge = titleLarge.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        titleMedium = titleMedium.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        titleSmall = titleSmall.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        bodyLarge = bodyLarge.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        bodyMedium = bodyMedium.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        bodySmall = bodySmall.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        labelLarge = labelLarge.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        labelMedium = labelMedium.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+        labelSmall = labelSmall.copy(fontFamily = fontFamily, platformStyle = PlatformTextStyle(includeFontPadding = false)),
     )
 }
 
@@ -1047,18 +1084,14 @@ fun WhiteDnsTheme(
     val colorScheme = if (darkTheme) WhiteDnsColorSchemeDark else WhiteDnsColorSchemeLight
     val isPersian = languageCode == WhiteDnsLanguage.Fa
     val layoutDirection = if (isPersian) LayoutDirection.Rtl else LayoutDirection.Ltr
-    val typography = if (isPersian) {
-        WhiteDnsTypography.withFontFamily(WhiteDnsPersianFontFamily)
-    } else {
-        WhiteDnsTypography
-    }
+    val typography = WhiteDnsTypography.withFontFamily(WhiteDnsFontFamily)
 
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = palette.Background.toArgb()
-            window.navigationBarColor = palette.Surface.toArgb()
+            window.navigationBarColor = palette.Background.toArgb()
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !darkTheme
                 isAppearanceLightNavigationBars = !darkTheme
@@ -1067,14 +1100,33 @@ fun WhiteDnsTheme(
     }
 
     val strings = if (isPersian) PersianStrings else EnglishStrings
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val localizedContext = remember(context, languageCode, configuration) {
+        ContextThemeWrapper(context, R.style.Theme_WhiteDNS).apply {
+            applyOverrideConfiguration(Configuration(configuration).apply {
+                setLocale(java.util.Locale.forLanguageTag(languageCode))
+            })
+        }
+    }
     CompositionLocalProvider(
         LocalWhiteDnsPalette provides palette,
+        LocalContentColor provides palette.Ink,
         LocalWhiteDnsStrings provides strings,
+        LocalContext provides localizedContext,
+        LocalConfiguration provides localizedContext.resources.configuration,
         androidx.compose.ui.platform.LocalLayoutDirection provides layoutDirection,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = typography,
+            shapes = Shapes(
+                extraSmall = RoundedCornerShape(8.dp),
+                small = RoundedCornerShape(12.dp),
+                medium = RoundedCornerShape(16.dp),
+                large = RoundedCornerShape(22.dp),
+                extraLarge = RoundedCornerShape(28.dp),
+            ),
             content = content,
         )
     }

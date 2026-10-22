@@ -138,10 +138,12 @@ class WhiteDnsViewModel(
     private var connectJob: Job? = null
     private var statsJob: Job? = null
     private var runtimeRefreshJob: Job? = null
-    private var batteryOptimizationRefreshJob: Job? = null
+    private var permissionStatusRefreshJob: Job? = null
     private var verificationJob: Job? = null
     private var scanLaunchJob: Job? = null
     private var scanStateRefreshJob: Job? = null
+    private val subscriptionMutex = Mutex()
+    private var lastAutomaticSubscriptionAttempt = 0L
     private var lastScannerResultProfileText = ""
     private var activeServerProfile: StormDnsServerProfile? = null
     private var activeRuntimeSessionId: String = ""
@@ -250,13 +252,13 @@ class WhiteDnsViewModel(
             networkIpAddress = findDeviceNetworkIpAddress(),
             scanConnectionProfileId = scanConnectionProfileId,
         )
+        if (previousSettings.connectionMode != normalizedSettings.connectionMode) {
+            refreshPermissionStatusWithRetry()
+        }
         if (shouldReconfigureActiveVpn(previousSettings, normalizedSettings)) {
             reconfigureActiveVpnSplitTunnel(normalizedSettings)
         }
     }
-
-    private val subscriptionMutex = Mutex()
-    private var lastAutomaticSubscriptionAttempt = 0L
 
     suspend fun importProfiles(raw: String, allowHttp: Boolean): Result<Unit> = subscriptionMutex.withLock {
         runCatching {
@@ -330,16 +332,17 @@ class WhiteDnsViewModel(
         )
     }
 
-    fun refreshBatteryOptimizationStatusWithRetry() {
-        batteryOptimizationRefreshJob?.cancel()
-        batteryOptimizationRefreshJob = viewModelScope.launch {
-            repeat(BatteryOptimizationRefreshAttempts) { attempt ->
+    fun refreshPermissionStatusWithRetry() {
+        permissionStatusRefreshJob?.cancel()
+        permissionStatusRefreshJob = viewModelScope.launch {
+            repeat(PermissionStatusRefreshAttempts) { attempt ->
                 refreshBatteryOptimizationStatus()
-                if (uiState.batteryOptimizationIgnored) {
+                refreshNotificationStatus()
+                if (uiState.batteryOptimizationIgnored && uiState.notificationsEnabled) {
                     return@launch
                 }
-                if (attempt < BatteryOptimizationRefreshAttempts - 1) {
-                    delay(BatteryOptimizationRefreshRetryDelayMillis)
+                if (attempt < PermissionStatusRefreshAttempts - 1) {
+                    delay(PermissionStatusRefreshRetryDelayMillis)
                 }
             }
         }
@@ -3025,8 +3028,8 @@ class WhiteDnsViewModel(
         const val VpnStopBeforeStormDnsStopDelayMillis = 1_500L
         const val SocksStreamTrackingTtlMillis = 120_000L
         const val EmptyTrafficSource = "none"
-        const val BatteryOptimizationRefreshAttempts = 8
-        const val BatteryOptimizationRefreshRetryDelayMillis = 500L
+        const val PermissionStatusRefreshAttempts = 8
+        const val PermissionStatusRefreshRetryDelayMillis = 500L
         const val VerificationStartDelayMillis = 700L
         const val VerificationProbeAttempts = 2
         const val VerificationProbeRetryDelayMillis = 750L

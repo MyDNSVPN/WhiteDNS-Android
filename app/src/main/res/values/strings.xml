@@ -63,7 +63,6 @@
     <string name="cd_dropdown_encryption_method">Encryption method dropdown</string>
     <string name="cd_dropdown_connection_profile">Connection profile dropdown</string>
     <string name="cd_dropdown_resolver_profile">Resolver profile dropdown</string>
-    <string name="cd_dropdown_advanced_settings">Advanced settings dropdown</string>
     <string name="cd_dropdown_log_level">Log level dropdown</string>
     <string name="cd_dropdown_dns_mode">DNS mode dropdown</string>
 
@@ -222,6 +221,7 @@
     <string name="cd_menu_button">Open app menu</string>
     <string name="cd_copy_address">Copy %1$s to clipboard</string>
     <string name="cd_enable_vpn_notification">Enable VPN notification permission</string>
+    <string name="cd_notification_settings">Open notification settings</string>
     <string name="cd_allow_background_vpn">Allow WhiteDNS to run in background</string>
     <string name="cd_split_tunnel_app_toggle">Toggle %1$s in split tunnel</string>
     <string name="cd_stat_card_detail">%1$s: %2$s, tap for details</string>

@@ -117,3 +117,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Vazirmatn fonts
+
+Source: https://github.com/rastikerdar/vazirmatn
+
+Copyright 2015 The Vazirmatn Project Authors.
+
+The bundled regular and bold fonts use the SIL Open Font License 1.1. The full
+license is included in the APK as `assets/vazirmatn-OFL.txt` and in this repository
+as `third_party/fonts/vazirmatn/OFL.txt`.

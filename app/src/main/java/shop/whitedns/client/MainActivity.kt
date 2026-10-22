@@ -34,8 +34,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        viewModel.refreshBatteryOptimizationStatusWithRetry()
-        viewModel.refreshNotificationStatus()
+        viewModel.refreshPermissionStatusWithRetry()
         viewModel.refreshRuntimeConnectionStatus()
     }
 
@@ -71,15 +70,12 @@ class MainActivity : ComponentActivity() {
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission(),
                 ) { granted ->
-                    viewModel.refreshNotificationStatus()
+                    viewModel.refreshPermissionStatusWithRetry()
                     val shouldConnect = shouldConnectAfterNotificationPermission
                     shouldConnectAfterNotificationPermission = false
-                    if (granted) {
-                        if (shouldConnect) {
-                            requestVpnPermission()
-                        }
-                    } else {
-                        openNotificationSettings()
+                    // Android reports cancellation as denied too; keep retries available.
+                    if (granted && shouldConnect) {
+                        requestVpnPermission()
                     }
                 }
 
@@ -113,6 +109,7 @@ class MainActivity : ComponentActivity() {
                     uiState = viewModel.uiState,
                     onBatteryOptimizationClick = ::requestBatteryOptimizationExemption,
                     onNotificationPermissionClick = { requestNotificationAccess(false) },
+                    onNotificationSettingsClick = ::openNotificationSettings,
                     onConnectClick = {
                         when (viewModel.uiState.connectionStatus) {
                             ConnectionStatus.DISCONNECTED -> {
@@ -179,7 +176,7 @@ class MainActivity : ComponentActivity() {
                 startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             }
         }.also {
-            viewModel.refreshBatteryOptimizationStatusWithRetry()
+            viewModel.refreshPermissionStatusWithRetry()
         }
     }
 
