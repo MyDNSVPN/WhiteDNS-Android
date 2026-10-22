@@ -343,7 +343,7 @@ class WhiteDnsSettingsStore(
                         item.optString("engine", DnsClientEngine.StormDns),
                     ),
                     cottenSettings = cottenDnsProfileSettingsFromJson(
-                        item.optJSONObject("cottenSettings"),
+                        item.optJSONObject("cottenSettings") ?: item,
                     ),
                     soarSettings = soarProfileSettingsFromJson(item.optJSONObject("soarSettings")),
                     subscription = SubscriptionSource.fromJson(item.optJSONObject("subscription")),

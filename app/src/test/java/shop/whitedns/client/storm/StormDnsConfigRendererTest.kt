@@ -488,4 +488,46 @@ class StormDnsConfigRendererTest {
         assertTrue(toml.contains("MTU_TEST_PARALLELISM_RESOLVERS = 1"))
         assertTrue(toml.contains("STARTUP_MODE = \"resolvers\""))
     }
+
+    @Test
+    fun maxLiveAndScanUseSameModeTransportAndCredential() {
+        val profile = shop.whitedns.client.model.StormDnsServerProfile("max", "Max", "a.example", "shared-test-key", 5,
+            engine = DnsClientEngine.CottenDns,
+            cottenSettings = CottenDnsProfileSettings(tunnelMode = "cottenmax", transportMode = "tcp",
+                cottenMaxOptions = shop.whitedns.client.model.CottenMaxOptions(standbyDomains = "a.example, b.example",
+                    discoveryEnabled = true, discoveryCandidates = "1.1.1.1:5353", qnameLossGuard = true)))
+        for (toml in listOf(StormDnsConfigRenderer.renderClientToml(profile, WhiteDnsSettings()),
+            StormDnsConfigRenderer.renderScanClientToml(profile, WhiteDnsSettings()))) {
+            assertTrue(toml.contains("TUNNEL_MODE = \"cottenmax\""))
+            assertTrue(toml.contains("RESOLVER_TRANSPORT = \"tcp\""))
+            assertTrue(toml.contains("ENCRYPTION_KEY = \"shared-test-key\""))
+            assertTrue(toml.contains("STANDBY_DOMAINS = [\"b.example\"]"))
+            assertTrue(toml.contains("RESOLVER_DISCOVERY_CANDIDATES = [\"1.1.1.1:5353\"]"))
+            assertTrue(toml.contains("COTTENMAX_QNAME_LOSS_GUARD = true"))
+        }
+        val storm = StormDnsConfigRenderer.renderClientToml(profile.copy(engine = DnsClientEngine.StormDns), WhiteDnsSettings())
+        assertFalse(storm.contains("COTTENMAX"))
+        assertFalse(storm.contains("TUNNEL_MODE"))
+        val compat = StormDnsConfigRenderer.renderClientToml(profile.copy(cottenSettings = profile.cottenSettings.copy(configPreset = "master-storm")), WhiteDnsSettings())
+        assertFalse(compat.contains("COTTENMAX"))
+        assertFalse(compat.contains("TUNNEL_MODE"))
+        assertTrue(compat.contains("RESOLVER_TRANSPORT = \"udp\""))
+    }
+
+    @Test
+    fun encryptedOptionsAndCustomPortsReachBothNativeModes() {
+        for (mode in listOf("legacy", "cottenmax")) {
+            for (transport in listOf("dot", "doh", "doh3", "doq")) {
+                val profile = shop.whitedns.client.model.StormDnsServerProfile("max", "Max", "a.example", "shared", 5,
+                    engine = DnsClientEngine.CottenDns, cottenSettings = CottenDnsProfileSettings(tunnelMode = mode,
+                        transportMode = transport, resolverDoTPort = "8853", resolverDoHPort = "8443",
+                        cottenMaxOptions = shop.whitedns.client.model.CottenMaxOptions(dnsPaddingBlockSize = 256, doh3FallbackToDoh = true)))
+                val toml = StormDnsConfigRenderer.renderClientToml(profile, WhiteDnsSettings())
+                assertTrue(toml.contains("DNS_PADDING_BLOCK_SIZE = 256"))
+                assertTrue(toml.contains(when (transport) { "doq" -> "RESOLVER_DOQ_PORT = 8853"; "dot" -> "RESOLVER_DOT_PORT = 8853"; else -> "RESOLVER_DOH_PORT = 8443" }))
+                assertEquals(transport == "doh3", toml.contains("RESOLVER_HTTP3_FALLBACK = true"))
+            }
+        }
+    }
+
 }

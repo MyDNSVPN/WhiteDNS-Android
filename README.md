@@ -26,6 +26,17 @@ WhiteDNS is backed by the [MasterDNS Client](https://github.com/masterking32/Mas
 
 The Android VPN path also packages `tun2proxy`; see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for third-party license details.
 
+## CottenMax beta on the current Android interface
+
+The `beta/cottenmax-20261021` branch combines the latest main interface with the reviewed CottenDNS core [`e50a43ef`](https://github.com/WhiteDNS/CottenDNS/commit/e50a43ef75ad10ae2ffbfa106d13c50de3e77624), including [PR #15](https://github.com/WhiteDNS/CottenDNS/pull/15). [Debug builds and test results](https://github.com/WhiteDNS/WhiteDNS-Android/actions?query=branch%3Abeta%2Fcottenmax-20261021) are available as workflow artifacts; these are beta builds, with no stable app release published by this update.
+
+Edit a CottenDNS connection profile, keep the same domain and key, and select **CottenMax (beta)**. The Master/Storm compatibility preset stays in Normal mode. Save, disconnect and reconnect.
+
+- Normal and Max coexist on an updated Max-enabled CottenDNS server. If Max cannot connect, switch back to Normal using the same profile.
+- UDP, TCP and automatic UDP/TCP selection apply to actual tunnel connections and Max resolver scanning. Encrypted DNS, padding, standby domains, discovery and query shaping remain optional.
+- Scans show testing and verified DNS paths. Max connection readiness waits for the core's authenticated tunnel-transfer marker.
+- Max options stay inside CottenDNS. The current main Soar engine, subscriptions and other engine controls remain available.
+
 ## Features
 
 - Android client for WhiteDNS DNS tunneling with StormDNS, CottenDns and Soar engines.

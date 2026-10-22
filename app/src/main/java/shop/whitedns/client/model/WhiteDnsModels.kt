@@ -65,6 +65,8 @@ object ServerDomains {
  * MasterDNS/StormDNS server.
  */
 data class CottenDnsProfileSettings(
+    val tunnelMode: String = "legacy",
+    val cottenMaxOptions: CottenMaxOptions = CottenMaxOptions(),
     val configPreset: String = "default",
     val transportMode: String = ModePreset,
     val deliveryMode: String = ModePreset,
@@ -110,7 +112,13 @@ data class CottenDnsProfileSettings(
     val isCompatibility: Boolean
         get() = normalizeConfigPreset(configPreset) == PresetMasterStorm
 
+    val hasUnsupportedMaxRateBudget: Boolean get() = usesCottenMax && queryRateLimit != RateOff
+
+    val usesCottenMax: Boolean get() = !isCompatibility && normalizeTunnelMode(tunnelMode) == "cottenmax"
+
     fun normalized(): CottenDnsProfileSettings = copy(
+        tunnelMode = if (isCompatibility) "legacy" else normalizeTunnelMode(tunnelMode),
+        cottenMaxOptions = cottenMaxOptions.normalized(),
         configPreset = normalizeConfigPreset(configPreset),
         transportMode = normalizeChoice(transportMode, TransportModeValues),
         deliveryMode = normalizeChoice(deliveryMode, DeliveryModeValues),
@@ -127,6 +135,8 @@ data class CottenDnsProfileSettings(
     )
 
     companion object {
+        fun normalizeTunnelMode(value: String): String = if (value.trim().lowercase() == "cottenmax") "cottenmax" else "legacy"
+
         const val ModePreset = "preset"
         const val PresetMasterStorm = "master-storm"
 
@@ -138,7 +148,7 @@ data class CottenDnsProfileSettings(
         const val MaxBackgroundScanParallelism = 100
 
         val ConfigPresetValues = listOf("default", "speed", "survival", "tcp-survival", "master-storm")
-        val TransportModeValues = listOf(ModePreset, "auto", "udp", "tcp", "dot", "doh")
+        val TransportModeValues = listOf(ModePreset, "auto", "udp", "tcp", "dot", "doh", "doh3", "doq")
         val DeliveryModeValues = listOf(ModePreset, "txt", "txt-cname", "txt-https", "txt-aaaa", "all")
         val QnameModeValues = listOf(ModePreset, "off", "moderate", "aggressive")
         val IpModeValues = listOf(ModePreset, "auto", "dual", "ipv4", "ipv6")
@@ -178,6 +188,8 @@ data class CottenDnsProfileSettings(
 fun CottenDnsProfileSettings.toJson(): JSONObject {
     val n = normalized()
     return JSONObject()
+        .put("tunnelMode", n.tunnelMode)
+        .put("cottenMaxOptions", n.cottenMaxOptions.toJson())
         .put("configPreset", n.configPreset)
         .put("transportMode", n.transportMode)
         .put("deliveryMode", n.deliveryMode)
@@ -201,6 +213,8 @@ fun cottenDnsProfileSettingsFromJson(json: JSONObject?): CottenDnsProfileSetting
         return defaults
     }
     return CottenDnsProfileSettings(
+        tunnelMode = json.optString("tunnelMode", defaults.tunnelMode),
+        cottenMaxOptions = CottenMaxOptions.fromJson(json.optJSONObject("cottenMaxOptions")),
         configPreset = json.optString("configPreset", defaults.configPreset),
         transportMode = json.optString("transportMode", defaults.transportMode),
         deliveryMode = json.optString("deliveryMode", defaults.deliveryMode),
@@ -583,6 +597,22 @@ data class ConnectionStats(
     val uploadSpeedBytesPerSecond: Long = 0,
     val peakSpeedBytesPerSecond: Long = 0,
     val connectedApps: Int = 0,
+    val lossPercent: Double = 0.0,
+    val activeResolverCount: Int = 0,
+    val transportSummary: String = "",
+    val transportExplorationCount: Long = 0,
+    val transportRestorationCount: Long = 0,
+    val transportSwitchCount: Long = 0,
+    val pathStripeCount: Long = 0,
+    val redundancySavedCount: Long = 0,
+    val txQueueDepth: Int = 0,
+    val encodedTxQueueDepth: Int = 0,
+    val rxQueueDepth: Int = 0,
+    val rxDropCount: Long = 0,
+    val txDropCount: Long = 0,
+    val transportRecoveryCount: Long = 0,
+    val streamDialFailureCount: Long = 0,
+    val streamWriteFailureCount: Long = 0,
 )
 
 data class ResolverRuntimeState(
@@ -715,6 +745,8 @@ data class WhiteDnsScanState(
     val updatedAtMillis: Long = 0,
     val durationMillis: Long = 0,
     val message: String = "",
+    val testingPaths: List<String> = emptyList(),
+    val workingPaths: List<String> = emptyList(),
     val validResolverEntries: List<String> = emptyList(),
     val rejectedResolverEntries: List<String> = emptyList(),
     val workerFailures: List<String> = emptyList(),

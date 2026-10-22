@@ -6,6 +6,11 @@ fun WhiteDnsSettings.importAdvancedSettingsProfileFromToml(
     name: String,
     toml: String,
 ): WhiteDnsSettings {
+    val connectionAssignments = parseTomlAssignments(toml)
+    if (connectionAssignments.isNotEmpty() && connectionAssignments.keys.all { it in CottenConnectionOptionKeys }) {
+        require(name.isNotBlank()) { "Enter a settings profile name" }
+        return importCottenConnectionOptions(connectionAssignments)
+    }
     val profile = parseAdvancedSettingsProfileFromToml(name, toml)
     val profiles = normalizedAdvancedProfiles()
         .filter { it.id != AdvancedSettingsProfile.DefaultId && it.id != profile.id } + profile
@@ -14,6 +19,7 @@ fun WhiteDnsSettings.importAdvancedSettingsProfileFromToml(
         advancedProfiles = profiles,
     ).applyAdvancedProfile(profile)
         .copy(autoTuneEnabled = profile.autoTuneEnabled)
+        .importCottenConnectionOptions(connectionAssignments)
 }
 
 private fun parseAdvancedSettingsProfileFromToml(
@@ -266,6 +272,89 @@ private fun parseAdvancedSettingsProfileFromToml(
     )
 }
 
+private val CottenConnectionOptionKeys = setOf(
+    "COTTENMAX_FAILOVER_AFTER_MILLISECONDS",
+    "COTTENMAX_SAFE_QNAME",
+    "COTTENMAX_MAX_QNAME",
+    "COTTENMAX_MAX_ANSWER",
+    "COTTENMAX_MAX_PATH_WINDOW",
+    "COTTENMAX_MAX_INFLIGHT",
+    "COTTENMAX_SESSION_IDLE_MILLISECONDS",
+    "COTTENMAX_HOLD_MILLISECONDS",
+    "DNS_PADDING_BLOCK_SIZE",
+    "RESOLVER_DISCOVERY_SAMPLE_RANGES",
+    "RESOLVER_DISCOVERY_WANT",
+    "RESOLVER_DISCOVERY_CONCURRENCY",
+    "RESOLVER_DISCOVERY_PACE_MILLISECONDS",
+    "RESOLVER_DISCOVERY_ENABLED",
+    "QNAME_LABEL_COUNT_JITTER",
+    "COTTENMAX_QNAME_LOSS_GUARD",
+    "RESOLVER_HTTP3_FALLBACK",
+    "RESOLVER_DISCOVERY_COUNTRY",
+    "RESOLVER_DISCOVERY_NETWORK_ID",
+    "STANDBY_DOMAINS",
+    "RESOLVER_DISCOVERY_CANDIDATES",
+    "TUNNEL_MODE",
+    "RESOLVER_TRANSPORT",
+    "RESOLVER_TLS_SERVER_NAME",
+    "RESOLVER_TLS_PIN",
+    "RESOLVER_DOT_PORT",
+    "RESOLVER_DOQ_PORT",
+    "RESOLVER_DOH_PORT",
+    "RESOLVER_DOH_PATH",
+    "RESOLVER_DISCOVERY_CACHE_FILE",
+)
+
+private fun WhiteDnsSettings.importCottenConnectionOptions(assignments: Map<String, TomlValue>): WhiteDnsSettings {
+    if (assignments.keys.none { it in CottenConnectionOptionKeys }) return this
+    val profile = selectedConnectionProfile()
+    require(DnsClientEngine.normalize(profile.engine) == DnsClientEngine.CottenDns && !profile.cottenSettings.isCompatibility) { "Select a native CottenDNS profile before importing CottenMax options" }
+    var cotten = profile.cottenSettings
+    assignments["RESOLVER_TRANSPORT"]?.let {
+        val transport = it.stringValue("RESOLVER_TRANSPORT").lowercase(Locale.US)
+        require(transport in CottenDnsProfileSettings.TransportModeValues) { "Unsupported resolver transport" }
+        cotten = cotten.copy(transportMode = transport)
+    }
+    assignments["RESOLVER_TLS_SERVER_NAME"]?.let { cotten = cotten.copy(resolverTlsServerName = it.stringValue("RESOLVER_TLS_SERVER_NAME")) }
+    assignments["RESOLVER_TLS_PIN"]?.let { cotten = cotten.copy(resolverTlsPin = it.stringValue("RESOLVER_TLS_PIN")) }
+    for (key in listOf("RESOLVER_DOT_PORT", "RESOLVER_DOQ_PORT")) assignments[key]?.let { cotten = cotten.copy(resolverDoTPort = it.intValue(key, 1, 65535).toString()) }
+    assignments["RESOLVER_DOH_PORT"]?.let { cotten = cotten.copy(resolverDoHPort = it.intValue("RESOLVER_DOH_PORT", 1, 65535).toString()) }
+    assignments["RESOLVER_DOH_PATH"]?.let { cotten = cotten.copy(resolverDoHPath = it.stringValue("RESOLVER_DOH_PATH")) }
+    var options = cotten.cottenMaxOptions
+    assignments["COTTENMAX_FAILOVER_AFTER_MILLISECONDS"]?.let { options = options.copy(failoverAfterMs = it.intValue("COTTENMAX_FAILOVER_AFTER_MILLISECONDS", 100, 60000)) }
+    assignments["COTTENMAX_SAFE_QNAME"]?.let { options = options.copy(safeQName = it.intValue("COTTENMAX_SAFE_QNAME", 64, 253)) }
+    assignments["COTTENMAX_MAX_QNAME"]?.let { options = options.copy(maxQName = it.intValue("COTTENMAX_MAX_QNAME", 64, 253)) }
+    assignments["COTTENMAX_MAX_ANSWER"]?.let { options = options.copy(maxAnswer = it.intValue("COTTENMAX_MAX_ANSWER", 512, 1232)) }
+    assignments["COTTENMAX_MAX_PATH_WINDOW"]?.let { options = options.copy(maxPathWindow = it.intValue("COTTENMAX_MAX_PATH_WINDOW", 1, 1024)) }
+    assignments["COTTENMAX_MAX_INFLIGHT"]?.let { options = options.copy(maxInflight = it.intValue("COTTENMAX_MAX_INFLIGHT", 1, 1024)) }
+    assignments["COTTENMAX_SESSION_IDLE_MILLISECONDS"]?.let { options = options.copy(sessionIdleMs = it.intValue("COTTENMAX_SESSION_IDLE_MILLISECONDS", 1000, 90000)) }
+    assignments["COTTENMAX_HOLD_MILLISECONDS"]?.let { options = options.copy(holdMs = it.intValue("COTTENMAX_HOLD_MILLISECONDS", 0, 1500)) }
+    assignments["DNS_PADDING_BLOCK_SIZE"]?.let { options = options.copy(dnsPaddingBlockSize = it.intValue("DNS_PADDING_BLOCK_SIZE", 0, 4096)) }
+    assignments["RESOLVER_DISCOVERY_SAMPLE_RANGES"]?.let { options = options.copy(discoverySampleRanges = it.intValue("RESOLVER_DISCOVERY_SAMPLE_RANGES", 0, 4096)) }
+    assignments["RESOLVER_DISCOVERY_WANT"]?.let { options = options.copy(discoveryWant = it.intValue("RESOLVER_DISCOVERY_WANT", 1, 64)) }
+    assignments["RESOLVER_DISCOVERY_CONCURRENCY"]?.let { options = options.copy(discoveryConcurrency = it.intValue("RESOLVER_DISCOVERY_CONCURRENCY", 1, 64)) }
+    assignments["RESOLVER_DISCOVERY_PACE_MILLISECONDS"]?.let { options = options.copy(discoveryPaceMs = it.intValue("RESOLVER_DISCOVERY_PACE_MILLISECONDS", 1, 60000)) }
+    assignments["RESOLVER_DISCOVERY_ENABLED"]?.let { options = options.copy(discoveryEnabled = it.booleanValue("RESOLVER_DISCOVERY_ENABLED")) }
+    assignments["QNAME_LABEL_COUNT_JITTER"]?.let { options = options.copy(labelCountJitter = it.booleanValue("QNAME_LABEL_COUNT_JITTER")) }
+    assignments["COTTENMAX_QNAME_LOSS_GUARD"]?.let { options = options.copy(qnameLossGuard = it.booleanValue("COTTENMAX_QNAME_LOSS_GUARD")) }
+    assignments["RESOLVER_HTTP3_FALLBACK"]?.let { options = options.copy(doh3FallbackToDoh = it.booleanValue("RESOLVER_HTTP3_FALLBACK")) }
+    assignments["RESOLVER_DISCOVERY_COUNTRY"]?.let { options = options.copy(discoveryCountry = it.stringValue("RESOLVER_DISCOVERY_COUNTRY")) }
+    assignments["RESOLVER_DISCOVERY_NETWORK_ID"]?.let { options = options.copy(discoveryNetworkId = it.stringValue("RESOLVER_DISCOVERY_NETWORK_ID")) }
+    assignments["STANDBY_DOMAINS"]?.let { options = options.copy(standbyDomains = it.stringListValue("STANDBY_DOMAINS").joinToString(", ")) }
+    assignments["RESOLVER_DISCOVERY_CANDIDATES"]?.let { options = options.copy(discoveryCandidates = it.stringListValue("RESOLVER_DISCOVERY_CANDIDATES").joinToString(", ")) }
+    assignments["RESOLVER_DISCOVERY_CACHE_FILE"]?.let {
+        // Android keeps this cache inside its private config directory.
+        options = options.copy(discoveryCacheEnabled = it.stringValue("RESOLVER_DISCOVERY_CACHE_FILE").isNotBlank())
+    }
+    require(options.maxQName >= options.safeQName) { "COTTENMAX_MAX_QNAME must be at least COTTENMAX_SAFE_QNAME" }
+    require(options.holdMs % 100 == 0) { "COTTENMAX_HOLD_MILLISECONDS must be a multiple of 100" }
+    require(options.dnsPaddingBlockSize == 0 || options.dnsPaddingBlockSize >= 16) { "DNS_PADDING_BLOCK_SIZE must be 0 or 16..4096" }
+    require(options.discoveryCountry.isBlank() || options.discoveryCountry.trim().matches(Regex("[A-Za-z]{2}"))) { "RESOLVER_DISCOVERY_COUNTRY must be a two-letter code" }
+    val mode = assignments["TUNNEL_MODE"]?.stringValue("TUNNEL_MODE")?.lowercase(Locale.US) ?: cotten.tunnelMode
+    require(mode in setOf("legacy", "cottenmax")) { "TUNNEL_MODE must be legacy or cottenmax" }
+    return upsertConnectionProfile(profile.copy(cottenSettings = cotten.copy(tunnelMode = mode, cottenMaxOptions = options.normalized()).normalized()))
+}
+
 private fun parseTomlAssignments(toml: String): Map<String, TomlValue> {
     if (toml.isBlank()) {
         throw IllegalArgumentException("Paste TOML or import a TOML file")
@@ -342,6 +431,11 @@ private data class TomlValue(
             fail("$key must be a scalar value")
         }
         return value
+    }
+
+    fun stringListValue(key: String): List<String> {
+        val array = runCatching { org.json.JSONArray(raw) }.getOrElse { fail("$key must be a string array") }
+        return List(array.length()) { index -> array.get(index) as? String ?: fail("$key must contain strings") }
     }
 
     fun booleanValue(key: String): Boolean {

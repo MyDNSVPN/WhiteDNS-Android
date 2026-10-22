@@ -33,7 +33,13 @@ import shop.whitedns.client.model.canDiscoverSoarResolvers
 import shop.whitedns.client.model.ResolvedWhiteDnsSettings
 import shop.whitedns.client.model.ServerDomains
 import shop.whitedns.client.model.StormDnsServerProfile
+import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
+import shop.whitedns.client.model.usesCottenMax
+import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
 import shop.whitedns.client.model.WhiteDnsSettings
+import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
+import shop.whitedns.client.model.usesCottenMax
+import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
 import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
@@ -140,7 +146,7 @@ class WhiteDnsProxyService : Service() {
                     if (resolvedSettings.connectionMode != "proxy") {
                         throw IllegalStateException("Proxy mode is not enabled")
                     }
-                    if (resolvedSettings.resolverEntries.isEmpty() && !settings.canDiscoverSoarResolvers()) {
+                    if (resolvedSettings.resolverEntries.isEmpty() && !settings.canDiscoverSoarResolvers() && !launchRequest.serverProfile.canBootstrapResolversWithCottenMax(settings)) {
                         throw IllegalStateException("Resolvers are required to connect")
                     }
                     val serverProfile = launchRequest.serverProfile
@@ -210,8 +216,10 @@ class WhiteDnsProxyService : Service() {
         resolvedSettings: ResolvedWhiteDnsSettings,
     ) {
         val startupFailure = AtomicReference<String?>(null)
+        val tunnelReady = java.util.concurrent.atomic.AtomicBoolean(!serverProfile.usesCottenMax())
         stormDnsProcessManager.start(serverProfile, settings) { line ->
             logInfo(line)
+            if (parseStormDnsConnectionProgressLine(line)?.phase == "connected") tunnelReady.set(true)
             detectStormDnsStartupFailure(line)?.let { failure ->
                 startupFailure.compareAndSet(null, failure)
             }
@@ -219,6 +227,7 @@ class WhiteDnsProxyService : Service() {
         waitForProxyPort(
             listenPort = resolvedSettings.listenPort,
             startupFailure = { startupFailure.get() },
+            tunnelReady = { tunnelReady.get() },
         )
         startHttpProxyBridge(resolvedSettings)
         WhiteDnsRuntimeStateStore.markReady(
@@ -253,6 +262,7 @@ class WhiteDnsProxyService : Service() {
     private suspend fun waitForProxyPort(
         listenPort: Int,
         startupFailure: () -> String?,
+        tunnelReady: () -> Boolean,
     ) {
         while (true) {
             startupFailure()?.let { failure ->
@@ -264,7 +274,7 @@ class WhiteDnsProxyService : Service() {
                     "DNS engine process exited before SOCKS was ready${exitCode?.let { " (exit code $it)" }.orEmpty()}",
                 )
             }
-            if (canConnectToLocalPort(listenPort)) {
+            if (tunnelReady() && canConnectToLocalPort(listenPort)) {
                 return
             }
             delay(500)

@@ -1177,4 +1177,35 @@ class WhiteDnsModelsTest {
         val paddedPayload = payload.padEnd(payload.length + ((4 - payload.length % 4) % 4), '=')
         return Base64.getUrlDecoder().decode(paddedPayload).toString(Charsets.UTF_8)
     }
+
+    @Test
+    fun cottenMaxProfileLinkKeepsModeOptionsDomainAndKey() {
+        val profile = ConnectionProfile(id = "max", name = "Max", customServerDomain = "a.example",
+            customServerEncryptionKey = "test-key", engine = DnsClientEngine.CottenDns,
+            cottenSettings = CottenDnsProfileSettings(tunnelMode = "cottenmax", transportMode = "tcp",
+                cottenMaxOptions = CottenMaxOptions(standbyDomains = "b.example", maxPathWindow = 128, discoveryEnabled = true)))
+        val settings = WhiteDnsSettings(selectedConnectionProfileId = profile.id, connectionProfiles = listOf(profile))
+        val imported = WhiteDnsSettings().importStormDnsProfileLink(settings.exportStormDnsProfileLink(profile)).selectedConnectionProfile()
+        assertEquals(profile.cottenSettings, imported.cottenSettings)
+        assertEquals(profile.customServerDomain, imported.customServerDomain)
+        assertEquals(profile.customServerEncryptionKey, imported.customServerEncryptionKey)
+    }
+
+    @Test
+    fun cottenMaxTomlOptionsStayOnSelectedNativeProfile() {
+        val profile = ConnectionProfile(id = "max", name = "Max", engine = DnsClientEngine.CottenDns)
+        val settings = WhiteDnsSettings(selectedConnectionProfileId = profile.id, connectionProfiles = listOf(profile))
+        val toml = "TUNNEL_MODE = \"cottenmax\"\nRESOLVER_TRANSPORT = \"tcp\"\nCOTTENMAX_MAX_INFLIGHT = 128\nSTANDBY_DOMAINS = [\"b.example\"]"
+        val imported = settings.importAdvancedSettingsProfileFromToml("Max", toml)
+        val cotten = imported.selectedConnectionProfile().cottenSettings
+        assertEquals("cottenmax", cotten.tunnelMode)
+        assertEquals("tcp", cotten.transportMode)
+        assertEquals(128, cotten.cottenMaxOptions.maxInflight)
+        assertEquals("b.example", cotten.cottenMaxOptions.standbyDomains)
+        assertThrows(IllegalArgumentException::class.java) {
+            settings.copy(connectionProfiles = listOf(profile.copy(engine = DnsClientEngine.StormDns)))
+                .importAdvancedSettingsProfileFromToml("Max", toml)
+        }
+    }
+
 }

@@ -201,6 +201,7 @@ import shop.whitedns.client.model.ConnectionStatus
 import shop.whitedns.client.model.ConnectionVerificationState
 import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.CottenDnsProfileSettings
+import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
 import shop.whitedns.client.model.SoarProfileSettings
 import shop.whitedns.client.model.isValidSoarServer
 import shop.whitedns.client.model.DnsClientEngine
@@ -581,7 +582,7 @@ private fun ConnectTabContent(
     } else {
         notSelectedStr
     }
-    val hasResolvers = resolverValidation.isValid ||
+    val hasResolvers = resolverValidation.isValid || settings.canBootstrapResolversWithCottenMax() ||
         (selectedConnectionProfile.engine == DnsClientEngine.Soar && selectedConnectionProfile.soarSettings.discovery && settings.resolverText.isBlank())
     val proxyIpAddress = displayProxyIpAddress(
         listenIp = resolvedSettings.listenIp,
@@ -1929,6 +1930,12 @@ private fun ScanTabContent(
                 InfoRow(label = WhiteDnsL10n.scanLabelSource, value = scanState.sourceName.ifBlank { WhiteDnsL10n.scanNoFileSelected })
                 InfoRow(label = WhiteDnsL10n.scanLabelWorkers, value = scanState.workerCount.toString())
                 InfoRow(label = WhiteDnsL10n.scanLabelProgress, value = "${scanState.completedResolvers}/${scanState.totalResolvers}")
+                if (scanState.testingPaths.isNotEmpty()) {
+                    InfoRow(label = "Testing DNS paths", value = scanState.testingPaths.takeLast(12).joinToString("\n"), multilineValue = true)
+                }
+                if (scanState.workingPaths.isNotEmpty()) {
+                    InfoRow(label = "Verified DNS paths", value = scanState.workingPaths.takeLast(24).joinToString("\n"), multilineValue = true)
+                }
                 if (scanState.message.isNotBlank()) {
                     InfoRow(label = WhiteDnsL10n.scanMessageLabel, value = scanState.message, multilineValue = true)
                 }
@@ -5421,7 +5428,7 @@ private fun ConnectionProfileDialog(
     }
     var soar by remember(profile?.id) { mutableStateOf(profile?.soarSettings?.normalized() ?: SoarProfileSettings()) }
     val effectiveEngine = DnsClientEngine.normalize(engine)
-    val canSave = name.isNotBlank() && if (effectiveEngine == DnsClientEngine.Soar) {
+    val canSave = name.isNotBlank() && !(effectiveEngine == DnsClientEngine.CottenDns && cotten.hasUnsupportedMaxRateBudget) && if (effectiveEngine == DnsClientEngine.Soar) {
         isValidSoarServer(domain, encryptionKey)
     } else ServerDomains.isValid(domain) && encryptionKey.isNotBlank()
 
@@ -5517,6 +5524,21 @@ private fun ConnectionProfileDialog(
                         options = localizedCottenConfigPresets(),
                         onValueChange = { cotten = cotten.copy(configPreset = it) },
                     )
+                    if (!cotten.isCompatibility) {
+                        WhiteDnsDropdownField(
+                            label = "CottenDNS mode",
+                            value = cotten.tunnelMode,
+                            options = listOf(Choice("legacy", WhiteDnsL10n.cottenDnsNormalMode), Choice("cottenmax", WhiteDnsL10n.cottenMaxBetaMode)),
+                            onValueChange = { cotten = cotten.copy(tunnelMode = it) },
+                        )
+                        Text(WhiteDnsL10n.cottenMaxSharedCredentialHint, style = MaterialTheme.typography.bodySmall)
+                        Text(WhiteDnsL10n.cottenMaxReconnectHint, style = MaterialTheme.typography.bodySmall)
+                        if (cotten.usesCottenMax) {
+                            Text(WhiteDnsL10n.cottenMaxCipherHint, style = MaterialTheme.typography.bodySmall)
+                            Text(WhiteDnsL10n.cottenMaxAdaptiveHint, style = MaterialTheme.typography.bodySmall)
+                        }
+                        CottenDnsOptionalConnectionFields(cotten, profile?.id.orEmpty()) { cotten = it }
+                    }
                     CottenDnsBackgroundScanSlider(
                         parallelism = cotten.backgroundScanParallelism,
                         onParallelismChange = { cotten = cotten.copy(backgroundScanParallelism = it) },
@@ -5528,6 +5550,9 @@ private fun ConnectionProfileDialog(
                         options = localizedCottenQueryRateLimits(),
                         onValueChange = { cotten = cotten.copy(queryRateLimit = it) },
                     )
+                    if (cotten.hasUnsupportedMaxRateBudget) {
+                        Text("CottenMax does not support a hard DNS query-rate cap yet. Select Normal mode to keep the cap, or explicitly turn the cap off before saving Max.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
                     if (cotten.queryRateLimit != CottenDnsProfileSettings.RateOff) {
                         WhiteDnsDropdownField(
                             label = WhiteDnsL10n.profileFieldQueryRateScope,
@@ -5583,7 +5608,7 @@ private fun ConnectionProfileDialog(
                                 color = WhiteDnsPalette.Muted,
                             ),
                         )
-                        if (cotten.transportMode == "dot" || cotten.transportMode == "doh") {
+                        if (cotten.transportMode in setOf("dot", "doh", "doh3", "doq")) {
                             WhiteDnsTextField(
                                 label = WhiteDnsL10n.profileFieldResolverTlsServerName,
                                 rawValue = true,
@@ -5598,7 +5623,7 @@ private fun ConnectionProfileDialog(
                                 onValueChange = { cotten = cotten.copy(resolverTlsPin = it.trim()) },
                                 placeholder = WhiteDnsL10n.profileResolverTlsPinPlaceholder,
                             )
-                            if (cotten.transportMode == "dot") {
+                            if (cotten.transportMode == "dot" || cotten.transportMode == "doq") {
                                 WhiteDnsTextField(
                                     label = WhiteDnsL10n.profileFieldResolverDoTPort,
                                     value = cotten.resolverDoTPort,
@@ -5622,7 +5647,7 @@ private fun ConnectionProfileDialog(
                             }
                         }
                     }
-                    CottenDnsPresetSummaryPanel(cotten)
+                    if (!cotten.usesCottenMax) CottenDnsPresetSummaryPanel(cotten)
                 }
             }
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
@@ -8901,6 +8926,7 @@ private fun buildDiagnosticsText(
         appendLine("Mode: ${WhiteDnsOptions.connectionModeLabel(resolvedSettings.connectionMode)}")
         appendLine("Profile: ${selectedProfile.name.ifBlank { selectedProfile.id }}")
         appendLine("Server: ${selectedProfile.customServerDomain.ifBlank { "not configured" }}")
+        if (selectedProfile.engine == DnsClientEngine.CottenDns) appendLine("CottenDNS mode: ${selectedProfile.cottenSettings.normalized().tunnelMode}")
         appendLine("Encryption key: ${selectedProfile.customServerEncryptionKey.ifBlank { "not configured" }}")
         appendLine("Resolver profile: ${resolverProfile?.name ?: "Manual resolvers"}")
         appendLine("Resolvers: ${resolvedSettings.resolverEntries.size}")
@@ -8918,6 +8944,29 @@ private fun buildDiagnosticsText(
         appendLine("Connected apps: ${uiState.connectionStats.connectedApps}")
         appendLine("Active resolvers: ${uiState.resolverRuntimeState.activeResolvers.size}")
         appendLine("Valid resolvers: ${uiState.resolverRuntimeState.validResolvers.size}")
+        appendLine("Measured loss: ${String.format(Locale.US, "%.1f%%", uiState.connectionStats.lossPercent)}")
+        appendLine("Transport state: ${uiState.connectionStats.transportSummary.ifBlank { "not reported" }}")
+        appendLine(
+            "Path events: explore=${uiState.connectionStats.transportExplorationCount} " +
+                "restore=${uiState.connectionStats.transportRestorationCount} " +
+                "switch=${uiState.connectionStats.transportSwitchCount} " +
+                "stripe=${uiState.connectionStats.pathStripeCount} " +
+                "saved=${uiState.connectionStats.redundancySavedCount}",
+        )
+        appendLine(
+            "Engine queues: ${uiState.connectionStats.txQueueDepth}/" +
+                "${uiState.connectionStats.encodedTxQueueDepth}/" +
+                "${uiState.connectionStats.rxQueueDepth}",
+        )
+        appendLine(
+            "Engine drops: rx=${uiState.connectionStats.rxDropCount} " +
+                "tx=${uiState.connectionStats.txDropCount}",
+        )
+        appendLine("Transport recoveries: ${uiState.connectionStats.transportRecoveryCount}")
+        appendLine(
+            "Stream failures: dial=${uiState.connectionStats.streamDialFailureCount} " +
+                "write=${uiState.connectionStats.streamWriteFailureCount}",
+        )
         appendLine("Verification: ${verification.status}")
         if (verification.message.isNotBlank()) {
             appendLine("Verification message: ${verification.message}")
@@ -9478,6 +9527,92 @@ private fun CottenDnsBackgroundScanSlider(
  * renderer itself, so it cannot drift from the generated TOML.
  */
 @Composable
+private fun CottenDnsOptionalConnectionFields(
+    cotten: CottenDnsProfileSettings,
+    profileId: String,
+    onSettingsChange: (CottenDnsProfileSettings) -> Unit,
+) {
+    val options = cotten.cottenMaxOptions
+    val max = cotten.usesCottenMax
+    val encrypted = cotten.transportMode in setOf("dot", "doh", "doh3", "doq")
+    fun update(next: shop.whitedns.client.model.CottenMaxOptions) {
+        onSettingsChange(cotten.copy(cottenMaxOptions = next))
+    }
+    if (encrypted) {
+        WhiteDnsDropdownField(
+            label = "Encrypted DNS padding",
+            value = options.dnsPaddingBlockSize,
+            options = (listOf(0, 128, 256, 512) + options.dnsPaddingBlockSize).distinct().map { Choice(it, if (it == 0) "Off" else "$it-byte blocks") },
+            onValueChange = { update(options.copy(dnsPaddingBlockSize = it)) },
+        )
+        if (cotten.transportMode == "doh3") {
+            ToggleRow("Allow HTTPS fallback when HTTP/3 fails", options.doh3FallbackToDoh) {
+                update(options.copy(doh3FallbackToDoh = !options.doh3FallbackToDoh))
+            }
+        }
+        Text(text = "Padding costs bandwidth. QUIC needs a path that carries 1,200-byte UDP packets.", style = MaterialTheme.typography.bodySmall)
+    }
+    if (!max) return
+    var expanded by rememberSaveable(profileId) { mutableStateOf(false) }
+    ToggleRow("Advanced CottenMax options", expanded) { expanded = !expanded }
+    if (!expanded) return
+    Text(text = "Defaults retain fast startup. Standbys use the same credential; existing streams reconnect after a server change.", style = MaterialTheme.typography.bodySmall)
+    WhiteDnsTextField("Standby domains (up to 8 domains total)", options.standbyDomains,
+        { update(options.copy(standbyDomains = it)) }, "backup.example, second.example", rawValue = true)
+    CottenMaxNumberField(profileId, "Failover wait (ms)", options.failoverAfterMs, 100, 60000) { update(options.copy(failoverAfterMs = it)) }
+    ToggleRow("Vary QNAME label count", options.labelCountJitter) { update(options.copy(labelCountJitter = !options.labelCountJitter)) }
+    ToggleRow("Experimental QNAME loss guard", options.qnameLossGuard) { update(options.copy(qnameLossGuard = !options.qnameLossGuard)) }
+    if (options.qnameLossGuard) {
+        Text(text = "Recent authenticated near-cap answers can avoid false QNAME downgrades under loss. This can help lossy paths but may slow healthy ones.", style = MaterialTheme.typography.bodySmall)
+    }
+    ToggleRow("Authenticated resolver discovery", options.discoveryEnabled) { update(options.copy(discoveryEnabled = !options.discoveryEnabled)) }
+    if (options.discoveryEnabled) {
+        WhiteDnsTextField("Resolver country (optional)", options.discoveryCountry,
+            { update(options.copy(discoveryCountry = it)) }, "ir", rawValue = true)
+        WhiteDnsTextField("Additional resolver candidates", options.discoveryCandidates,
+            { update(options.copy(discoveryCandidates = it)) }, "IP:port, IP:port", rawValue = true)
+        ToggleRow("Remember verified resolver hints", options.discoveryCacheEnabled) { update(options.copy(discoveryCacheEnabled = !options.discoveryCacheEnabled)) }
+        if (options.discoveryCacheEnabled) {
+            WhiteDnsTextField("Network label (optional)", options.discoveryNetworkId,
+                { update(options.copy(discoveryNetworkId = it)) }, "home or mobile", rawValue = true)
+        }
+        CottenMaxNumberField(profileId, "Address-range samples (0 disables)", options.discoverySampleRanges, 0, 4096) { update(options.copy(discoverySampleRanges = it)) }
+        Text(text = "Discovery tests additional DNS endpoints. Range sampling is opt-in; cached candidates authenticate again on every connection.", style = MaterialTheme.typography.bodySmall)
+        CottenMaxNumberField(profileId, "Desired verified resolvers", options.discoveryWant, 1, 64) { update(options.copy(discoveryWant = it)) }
+        CottenMaxNumberField(profileId, "Discovery concurrency", options.discoveryConcurrency, 1, 64) { update(options.copy(discoveryConcurrency = it)) }
+        CottenMaxNumberField(profileId, "Discovery pace (ms)", options.discoveryPaceMs, 1, 60000) { update(options.copy(discoveryPaceMs = it)) }
+    }
+    CottenMaxNumberField(profileId, "Initial QNAME size", options.safeQName, 64, 253) { update(options.copy(safeQName = it)) }
+    CottenMaxNumberField(profileId, "Maximum QNAME size", options.maxQName, 64, 253) { update(options.copy(maxQName = it)) }
+    CottenMaxNumberField(profileId, "Maximum DNS answer size", options.maxAnswer, 512, 1232) { update(options.copy(maxAnswer = it)) }
+    CottenMaxNumberField(profileId, "Per-path query window", options.maxPathWindow, 1, 1024) { update(options.copy(maxPathWindow = it)) }
+    CottenMaxNumberField(profileId, "Total in-flight queries", options.maxInflight, 1, 1024) { update(options.copy(maxInflight = it)) }
+    CottenMaxNumberField(profileId, "Idle session retirement (ms)", options.sessionIdleMs, 1000, 90000) { update(options.copy(sessionIdleMs = it)) }
+    WhiteDnsDropdownField("Held poll interval", options.holdMs,
+        (0..1500 step 100).map { Choice(it, if (it == 0) "Off" else "$it ms") },
+        { update(options.copy(holdMs = it)) })
+}
+
+@Composable
+private fun CottenMaxNumberField(
+    profileId: String,
+    label: String,
+    value: Int,
+    min: Int,
+    max: Int,
+    onValueChange: (Int) -> Unit,
+) {
+    var text by rememberSaveable(profileId, label) { mutableStateOf(value.toString()) }
+    LaunchedEffect(value) { if (text.toIntOrNull() != value) text = value.toString() }
+    WhiteDnsTextField(label, text, { next ->
+        if (next.all(Char::isDigit)) {
+            text = next
+            next.toIntOrNull()?.takeIf { it in min..max }?.let(onValueChange)
+        }
+    }, "$min–$max", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), rawValue = true)
+}
+
+@Composable
 private fun CottenDnsPresetSummaryPanel(settings: CottenDnsProfileSettings) {
     val summary = remember(settings) { CottenDnsSettingsRenderer.summarize(settings) }
     Column(
@@ -9542,6 +9677,8 @@ private fun localizedCottenTransportModes(): List<Choice<String>> = listOf(
     Choice("tcp", WhiteDnsL10n.cottenTransportTcp),
     Choice("dot", WhiteDnsL10n.cottenTransportDot),
     Choice("doh", WhiteDnsL10n.cottenTransportDoh),
+    Choice("doh3", "DoH over HTTP/3 (QUIC)"),
+    Choice("doq", "DNS over QUIC"),
 )
 
 @Composable

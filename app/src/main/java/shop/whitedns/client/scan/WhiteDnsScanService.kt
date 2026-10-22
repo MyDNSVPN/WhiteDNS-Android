@@ -164,6 +164,7 @@ class WhiteDnsScanService : Service() {
         )
         val workerStats = Array(workerInputs.size) { WorkerScanStats(total = workerInputs[it].resolverCount) }
         val workerFailures = mutableListOf<String>()
+        val pathStats = Array(workerInputs.size) { StormDnsScanPaths() }
         val stateLock = Any()
         val initialEntryCount = (validResolvers + rejectedResolvers).distinct().size
         val initialProcessedCount = maxOf(initialCompletedResolvers, initialEntryCount)
@@ -190,6 +191,8 @@ class WhiteDnsScanService : Service() {
                 updatedAtMillis = System.currentTimeMillis(),
                 durationMillis = System.currentTimeMillis() - startedAtMillis,
                 message = message,
+                testingPaths = if (status == WhiteDnsScanStatus.Running) pathStats.flatMap { it.testingPaths }.distinct().takeLast(64) else emptyList(),
+                workingPaths = pathStats.flatMap { it.workingPaths }.distinct().takeLast(256),
                 validResolverEntries = validEntries,
                 rejectedResolverEntries = rejectedEntries,
                 workerFailures = workerFailures.toList(),
@@ -248,6 +251,7 @@ class WhiteDnsScanService : Service() {
                             engine = engine,
                             line = line,
                             workerStats = workerStats,
+                            pathStats = pathStats,
                             validResolvers = validResolvers,
                             rejectedResolvers = rejectedResolvers,
                             stateLock = stateLock,
@@ -302,6 +306,7 @@ class WhiteDnsScanService : Service() {
         engine: String,
         line: String,
         workerStats: Array<WorkerScanStats>,
+        pathStats: Array<StormDnsScanPaths>,
         validResolvers: MutableSet<String>,
         rejectedResolvers: MutableSet<String>,
         stateLock: Any,
@@ -322,6 +327,10 @@ class WhiteDnsScanService : Service() {
         }
 
         when (val telemetry = parseStormDnsScanLine(line)) {
+            is StormDnsScanTelemetry.Testing, is StormDnsScanTelemetry.Path -> {
+                synchronized(stateLock) { pathStats[workerIndex].update(telemetry) }
+                publishAggregate(WhiteDnsScanStatus.Running, "Testing DNS paths", false)
+            }
             is StormDnsScanTelemetry.Valid -> {
                 val resolver = WhiteDnsScannerResultStore.normalizeResolverEntry(telemetry.resolver) ?: return
                 var validCount = 0
@@ -347,6 +356,7 @@ class WhiteDnsScanService : Service() {
             }
             is StormDnsScanTelemetry.Complete -> {
                 synchronized(stateLock) {
+                    pathStats[workerIndex].clearTesting()
                     workerStats[workerIndex].completed = telemetry.total
                     workerStats[workerIndex].total = telemetry.total
                     workerStats[workerIndex].valid = telemetry.valid

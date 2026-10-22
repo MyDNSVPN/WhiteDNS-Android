@@ -46,7 +46,7 @@ object StormDnsConfigRenderer {
             appendLine("DATA_ENCRYPTION_METHOD = ${serverProfile.encryptionMethod}")
             appendLine("ENCRYPTION_KEY = \"${escape(serverProfile.encryptionKey)}\"")
             appendLine("PROTOCOL_TYPE = \"${escape(resolved.protocolType)}\"")
-            appendEngineSettingsToml(serverProfile.engine, serverProfile.cottenSettings)
+            appendEngineSettingsToml(serverProfile.engine, serverProfile.cottenSettings, serverProfile.domain)
             // The initial pre-connection scan uses the app-wide resolver
             // parallelism for both engines, so connecting stays fast. Only the
             // CottenDNS background sweep is tuned per profile, via its own key in
@@ -76,7 +76,7 @@ object StormDnsConfigRenderer {
             appendLine("DATA_ENCRYPTION_METHOD = ${serverProfile.encryptionMethod}")
             appendLine("ENCRYPTION_KEY = \"${escape(serverProfile.encryptionKey)}\"")
             appendLine("PROTOCOL_TYPE = \"${escape(resolved.protocolType)}\"")
-            appendEngineSettingsToml(serverProfile.engine, serverProfile.cottenSettings)
+            appendEngineSettingsToml(serverProfile.engine, serverProfile.cottenSettings, serverProfile.domain)
             appendClientSettingsToml(
                 resolved = resolved,
                 listenIp = "127.0.0.1",
@@ -112,12 +112,13 @@ object StormDnsConfigRenderer {
     private fun StringBuilder.appendEngineSettingsToml(
         engine: String,
         cottenSettings: CottenDnsProfileSettings,
+        primaryDomain: String,
     ) {
         if (DnsClientEngine.normalize(engine) != DnsClientEngine.CottenDns) {
             return
         }
         with(CottenDnsSettingsRenderer) {
-            appendCottenDnsSettingsToml(cottenSettings, ::escape)
+            appendCottenDnsSettingsToml(cottenSettings, ::escape, primaryDomain)
         }
     }
 

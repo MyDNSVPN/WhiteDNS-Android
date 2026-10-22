@@ -53,6 +53,7 @@ object WhiteDnsScanStateStore {
         return previous.copy(
             sessionId = sessionId.ifBlank { previous.sessionId },
             status = WhiteDnsScanStatus.Stopped,
+            testingPaths = emptyList(),
             updatedAtMillis = System.currentTimeMillis(),
             message = message,
             workerFailures = if (clearWorkerFailures) emptyList() else previous.workerFailures,
@@ -77,6 +78,8 @@ object WhiteDnsScanStateStore {
             .put("updatedAtMillis", state.updatedAtMillis)
             .put("durationMillis", state.durationMillis)
             .put("message", state.message)
+            .put("testingPaths", JSONArray(state.testingPaths))
+            .put("workingPaths", JSONArray(state.workingPaths))
             .put("validResolverEntries", JSONArray().also { array ->
                 state.validResolverEntries.forEach(array::put)
             })
@@ -102,6 +105,8 @@ object WhiteDnsScanStateStore {
             updatedAtMillis = json.optLong("updatedAtMillis"),
             durationMillis = json.optLong("durationMillis"),
             message = json.optString("message"),
+            testingPaths = json.optJSONArray("testingPaths").toStringList().takeLast(64),
+            workingPaths = json.optJSONArray("workingPaths").toStringList().takeLast(256),
             validResolverEntries = json.optJSONArray("validResolverEntries").toStringList(),
             rejectedResolverEntries = json.optJSONArray("rejectedResolverEntries").toStringList(),
             workerFailures = json.optJSONArray("workerFailures").toStringList(),

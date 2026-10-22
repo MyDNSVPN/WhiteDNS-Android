@@ -72,4 +72,37 @@ class CottenDnsProfileSettingsTest {
         assertEquals(CottenDnsProfileSettings(), cottenDnsProfileSettingsFromJson(null))
         assertEquals(CottenDnsProfileSettings(), cottenDnsProfileSettingsFromJson(JSONObject()))
     }
+
+    @Test
+    fun maxOptionsAndModeSurviveSettingsRoundTrip() {
+        val original = CottenDnsProfileSettings(tunnelMode = "cottenmax", transportMode = "doq",
+            cottenMaxOptions = CottenMaxOptions(standbyDomains = "b.example", discoveryEnabled = true,
+                discoveryCandidates = "1.1.1.1:5353", dnsPaddingBlockSize = 256, qnameLossGuard = true))
+        assertEquals(original.normalized(), cottenDnsProfileSettingsFromJson(original.toJson()))
+        assertEquals(true, original.usesCottenMax)
+        assertEquals("legacy", original.copy(configPreset = "master-storm").normalized().tunnelMode)
+        assertEquals(false, original.copy(configPreset = "master-storm").usesCottenMax)
+    }
+
+    @Test
+    fun discoveryBootstrapIsRestrictedToNativeMaxAndBlankResolvers() {
+        val cotten = CottenDnsProfileSettings(tunnelMode = "cottenmax", cottenMaxOptions = CottenMaxOptions(discoveryEnabled = true))
+        val profile = ConnectionProfile(id = "max", name = "Max", engine = DnsClientEngine.CottenDns, cottenSettings = cotten)
+        fun settings(p: ConnectionProfile) = WhiteDnsSettings(selectedConnectionProfileId = p.id, connectionProfiles = listOf(p))
+        assertEquals(true, settings(profile).canBootstrapResolversWithCottenMax())
+        assertEquals(false, settings(profile).copy(resolverText = "invalid").canBootstrapResolversWithCottenMax())
+        assertEquals(false, settings(profile.copy(engine = DnsClientEngine.Soar)).canBootstrapResolversWithCottenMax())
+        assertEquals(false, settings(profile.copy(engine = DnsClientEngine.StormDns)).canBootstrapResolversWithCottenMax())
+        assertEquals(false, settings(profile.copy(cottenSettings = cotten.copy(configPreset = "master-storm"))).canBootstrapResolversWithCottenMax())
+    }
+
+    @Test
+    fun maxNeverSilentlyDisablesAnExplicitHardQueryBudget() {
+        val normal = CottenDnsProfileSettings(queryRateLimit = "2")
+        assertEquals(false, normal.hasUnsupportedMaxRateBudget)
+        val max = normal.copy(tunnelMode = "cottenmax").normalized()
+        assertEquals("2", max.queryRateLimit)
+        assertEquals(true, max.hasUnsupportedMaxRateBudget)
+        assertEquals(false, max.copy(queryRateLimit = "off").hasUnsupportedMaxRateBudget)
+    }
 }

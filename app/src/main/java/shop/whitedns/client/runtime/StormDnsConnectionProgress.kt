@@ -60,4 +60,4 @@ private const val ProgressMarker = "WD_PROGRESS"
 
 private val ProgressFieldRegex = Regex("""(\w+)=([^\s]+)""")
 
-private val AnsiEscapeRegex = Regex("\\u001B\\[[;\\d]*m")
+private val AnsiEscapeRegex = Regex("${27.toChar()}\\[[;?0-9]*[ -/]*[@-~]")

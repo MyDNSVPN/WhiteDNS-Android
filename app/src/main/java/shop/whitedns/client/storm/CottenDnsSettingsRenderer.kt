@@ -1,6 +1,7 @@
 package shop.whitedns.client.storm
 
 import shop.whitedns.client.model.CottenDnsProfileSettings
+import shop.whitedns.client.model.CottenMaxOptions
 
 /**
  * CottenDNS-only TOML, ported from the cottendns-engine-ui branch's
@@ -16,6 +17,7 @@ internal object CottenDnsSettingsRenderer {
     fun StringBuilder.appendCottenDnsSettingsToml(
         settings: CottenDnsProfileSettings,
         escape: (String) -> String,
+        primaryDomain: String = "",
     ) {
         val cotten = settings.normalized()
         val isCompatibility = cotten.isCompatibility
@@ -26,6 +28,10 @@ internal object CottenDnsSettingsRenderer {
         // default base (explicit keys always win over the preset in the engine).
         appendLine("CONFIG_PRESET = \"${escape(enginePresetBase(preset, isCompatibility))}\"")
         appendLine("LEGACY_SESSION_ID = $isCompatibility")
+        if (!isCompatibility) {
+            appendLine("TUNNEL_MODE = \"${cotten.tunnelMode}\"")
+            appendCottenOptionsToml(cotten, primaryDomain, escape)
+        }
         appendLine("TERMINAL_UI = \"plain\"")
         appendLine("RESOLVER_IP_MODE = \"${resolverIpMode(cotten)}\"")
 
@@ -113,6 +119,49 @@ internal object CottenDnsSettingsRenderer {
         }
     }
 
+    private fun StringBuilder.appendCottenOptionsToml(
+        cotten: CottenDnsProfileSettings,
+        primaryDomain: String,
+        escape: (String) -> String,
+    ) {
+        val options = cotten.cottenMaxOptions.normalized()
+        val transport = if (cotten.transportMode == "preset") resolverTransport(cotten.configPreset) else cotten.transportMode
+        if (transport in setOf("dot", "doh", "doh3", "doq") && options.dnsPaddingBlockSize > 0) {
+            appendLine("DNS_PADDING_BLOCK_SIZE = ${options.dnsPaddingBlockSize}")
+        }
+        if (transport == "doh3" && options.doh3FallbackToDoh) {
+            appendLine("RESOLVER_HTTP3_FALLBACK = true")
+        }
+        if (!cotten.usesCottenMax) return
+        val primary = primaryDomain.split(',').map { it.trim().trimEnd('.').lowercase() }.distinct()
+        val standbys = CottenMaxOptions.entries(options.standbyDomains).filterNot { it in primary }.take((8 - primary.size).coerceAtLeast(0))
+        if (standbys.isNotEmpty()) appendLine("STANDBY_DOMAINS = ${standbys.joinToString(prefix = "[", postfix = "]") { "\"${escape(it)}\"" }}")
+        appendLine("COTTENMAX_FAILOVER_AFTER_MILLISECONDS = ${options.failoverAfterMs}")
+        appendLine("COTTENMAX_SAFE_QNAME = ${options.safeQName}")
+        appendLine("COTTENMAX_MAX_QNAME = ${options.maxQName}")
+        appendLine("COTTENMAX_MAX_ANSWER = ${options.maxAnswer}")
+        appendLine("COTTENMAX_MAX_PATH_WINDOW = ${options.maxPathWindow}")
+        appendLine("COTTENMAX_MAX_INFLIGHT = ${options.maxInflight}")
+        appendLine("COTTENMAX_SESSION_IDLE_MILLISECONDS = ${options.sessionIdleMs}")
+        appendLine("COTTENMAX_HOLD_MILLISECONDS = ${options.holdMs}")
+        appendLine("QNAME_LABEL_COUNT_JITTER = ${options.labelCountJitter}")
+        if (options.qnameLossGuard) appendLine("COTTENMAX_QNAME_LOSS_GUARD = true")
+        appendLine("RESOLVER_DISCOVERY_ENABLED = ${options.discoveryEnabled}")
+        if (options.discoveryEnabled) {
+            appendLine("RESOLVER_DISCOVERY_COUNTRY = \"${escape(options.discoveryCountry)}\"")
+            appendLine("RESOLVER_DISCOVERY_SAMPLE_RANGES = ${options.discoverySampleRanges}")
+            appendLine("RESOLVER_DISCOVERY_WANT = ${options.discoveryWant}")
+            appendLine("RESOLVER_DISCOVERY_CONCURRENCY = ${options.discoveryConcurrency}")
+            appendLine("RESOLVER_DISCOVERY_PACE_MILLISECONDS = ${options.discoveryPaceMs}")
+            val candidates = CottenMaxOptions.entries(options.discoveryCandidates)
+            if (candidates.isNotEmpty()) appendLine("RESOLVER_DISCOVERY_CANDIDATES = ${candidates.joinToString(prefix = "[", postfix = "]") { "\"${escape(it)}\"" }}")
+            if (options.discoveryCacheEnabled) {
+                appendLine("RESOLVER_DISCOVERY_CACHE_FILE = \"cottendns-discovery-cache.json\"")
+                appendLine("RESOLVER_DISCOVERY_NETWORK_ID = \"${escape(options.discoveryNetworkId)}\"")
+            }
+        }
+    }
+
     /** What the profile will actually emit, for the read-only UI summary. */
     data class Summary(
         val transport: String,
@@ -139,7 +188,9 @@ internal object CottenDnsSettingsRenderer {
             "udp" -> "UDP/53 only"
             "tcp" -> "forced DNS-over-TCP/53"
             "dot" -> "DoT over TLS, falls back to UDP then TCP/53"
-            "doh" -> "DoH over HTTPS, falls back to UDP then TCP/53"
+            "doh" -> "DoH over HTTPS"
+            "doh3" -> "DoH over HTTP/3 (QUIC)"
+            "doq" -> "DNS over QUIC"
             else -> "UDP/53 with TCP/53 fallback"
         }
 
@@ -190,8 +241,9 @@ internal object CottenDnsSettingsRenderer {
         transport: String,
         cotten: CottenDnsProfileSettings,
         escape: (String) -> String,
+        primaryDomain: String = "",
     ) {
-        if (transport != "dot" && transport != "doh") {
+        if (transport !in setOf("dot", "doh", "doh3", "doq")) {
             return
         }
         if (cotten.resolverTlsServerName.isNotEmpty()) {
@@ -200,7 +252,9 @@ internal object CottenDnsSettingsRenderer {
         if (cotten.resolverTlsPin.isNotEmpty()) {
             appendLine("RESOLVER_TLS_PIN = \"${escape(cotten.resolverTlsPin)}\"")
         }
-        if (transport == "dot") {
+        if (transport == "doq") {
+            appendLine("RESOLVER_DOQ_PORT = ${cotten.resolverDoTPort}")
+        } else if (transport == "dot") {
             appendLine("RESOLVER_DOT_PORT = ${cotten.resolverDoTPort}")
         } else {
             appendLine("RESOLVER_DOH_PORT = ${cotten.resolverDoHPort}")
