@@ -395,6 +395,12 @@ object WhiteDnsL10n {
     val profileFieldEngine: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldEngine
     val profileEngineStormDns: String @Composable get() = LocalWhiteDnsStrings.current.profileEngineStormDns
     val profileEngineCottenDns: String @Composable get() = LocalWhiteDnsStrings.current.profileEngineCottenDns
+    val cottenDnsNormalMode: String @Composable get() = LocalWhiteDnsStrings.current.cottenDnsNormalMode
+    val cottenMaxBetaMode: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxBetaMode
+    val cottenMaxSharedCredentialHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxSharedCredentialHint
+    val cottenMaxReconnectHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxReconnectHint
+    val cottenMaxCipherHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxCipherHint
+    val cottenMaxAdaptiveHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxAdaptiveHint
     val profileCottenSectionTitle: String @Composable get() = LocalWhiteDnsStrings.current.profileCottenSectionTitle
     val profileFieldConfigPreset: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldConfigPreset
     val profileFieldTransportMode: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldTransportMode

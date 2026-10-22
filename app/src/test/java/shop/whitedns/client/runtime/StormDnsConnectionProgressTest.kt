@@ -35,4 +35,13 @@ class StormDnsConnectionProgressTest {
     fun parseStormDnsConnectionProgressLineIgnoresOtherLines() {
         assertNull(parseStormDnsConnectionProgressLine("not progress"))
     }
+
+    @Test
+    fun authenticatedReadyMarkerIsParsedWithAnsiAndEarlierPhasesStayConnecting() {
+        val ready = parseStormDnsConnectionProgressLine("${27.toChar()}[32mWD_PROGRESS phase=connected percent=100${27.toChar()}[0m")
+        assertEquals("connected", ready?.phase)
+        assertEquals(100, ready?.percent)
+        assertEquals("runtime", parseStormDnsConnectionProgressLine("WD_PROGRESS phase=runtime percent=98")?.phase)
+    }
+
 }

@@ -57,7 +57,9 @@ import shop.whitedns.client.model.WhiteDnsScanDefaults
 import shop.whitedns.client.model.WhiteDnsScanState
 import shop.whitedns.client.model.WhiteDnsScanStatus
 import shop.whitedns.client.model.WhiteDnsRuntimeProxy
+import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
 import shop.whitedns.client.model.WhiteDnsSettings
+import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
 import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.WhiteDnsUiState
 import shop.whitedns.client.model.WhiteDnsAutoTunePresets
@@ -416,7 +418,7 @@ class WhiteDnsViewModel(
                 stopServerTestManagers()
             }
             val settings = uiState.settings.syncSelectedConnectionProfileFields()
-            if (settings.resolve().resolverEntries.isEmpty() && !settings.canDiscoverSoarResolvers()) {
+            if (settings.resolve().resolverEntries.isEmpty() && !settings.canDiscoverSoarResolvers() && !settings.canBootstrapResolversWithCottenMax()) {
                 appendLog("Resolvers are required to connect")
                 activeRuntimeSessionId = ""
                 uiState = uiState.copy(
@@ -2688,6 +2690,22 @@ class WhiteDnsViewModel(
                 uploadSpeedBytesPerSecond = stats.uploadSpeedBytesPerSecond,
                 peakSpeedBytesPerSecond = peakSpeed,
                 connectedApps = connectedApps,
+                lossPercent = stats.lossPercent,
+                activeResolverCount = stats.activeResolvers,
+                transportSummary = stats.transportSummary,
+                transportExplorationCount = stats.explorationCount,
+                transportRestorationCount = stats.restorationCount,
+                transportSwitchCount = stats.transportSwitchCount,
+                pathStripeCount = stats.stripeCount,
+                redundancySavedCount = stats.redundancySavedCount,
+                txQueueDepth = stats.txQueueDepth,
+                encodedTxQueueDepth = stats.encodedTxQueueDepth,
+                rxQueueDepth = stats.rxQueueDepth,
+                rxDropCount = stats.rxDropCount,
+                txDropCount = stats.txDropCount,
+                transportRecoveryCount = stats.recoveryCount,
+                streamDialFailureCount = stats.streamDialFailureCount,
+                streamWriteFailureCount = stats.streamWriteFailureCount,
             )
         }
 

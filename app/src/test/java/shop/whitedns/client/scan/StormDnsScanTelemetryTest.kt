@@ -30,4 +30,18 @@ class StormDnsScanTelemetryTest {
     fun parseStormDnsScanLineIgnoresOtherLines() {
         assertNull(parseStormDnsScanLine("WD_PROGRESS phase=mtu percent=50"))
     }
+
+    @Test
+    fun livePathsDistinguishUdpAndTcpAndRetainOnlyVerifiedPaths() {
+        val paths = StormDnsScanPaths()
+        fun record(line: String) { paths.update(requireNotNull(parseStormDnsScanLine(line))) }
+        record("WD_SCAN event=testing resolver=1.1.1.1:53 transport=udp")
+        record("WD_SCAN event=testing resolver=1.1.1.1:53 transport=tcp")
+        assertEquals(2, paths.testingPaths.size)
+        record("WD_SCAN event=path resolver=1.1.1.1:53 transport=udp usable=false")
+        record("WD_SCAN event=path resolver=1.1.1.1:53 transport=tcp transfer_verified=true")
+        assertEquals(emptyList<String>(), paths.testingPaths)
+        assertEquals(listOf("1.1.1.1:53 (TCP)"), paths.workingPaths)
+    }
+
 }

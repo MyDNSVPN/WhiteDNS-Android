@@ -37,6 +37,10 @@ fun WhiteDnsSettings.exportStormDnsProfileLink(profile: ConnectionProfile = sele
         .put("version", StormDnsProfileVersion)
         .put("profile", profileJson)
 
+    if (DnsClientEngine.normalize(normalizedProfile.engine) == DnsClientEngine.CottenDns &&
+        normalizedProfile.cottenSettings.normalized() != CottenDnsProfileSettings()) {
+        profileJson.put("cottenSettings", normalizedProfile.cottenSettings.toJson())
+    }
     if (normalizedProfile.engine == DnsClientEngine.Soar) {
         require(isValidSoarServer(normalizedProfile.customServerDomain, normalizedProfile.customServerEncryptionKey)) { "Invalid Soar domain or server public key" }
         profileJson.getJSONObject("server").remove("encryption_key")
@@ -157,6 +161,7 @@ fun WhiteDnsSettings.importStormDnsProfileLink(
         resolverProfileId = importedResolvers?.id.orEmpty(),
         connectionMode = connectionMode,
         engine = engine,
+        cottenSettings = cottenDnsProfileSettingsFromJson(profileJson.optJSONObject("cottenSettings") ?: profileJson),
         soarSettings = soarProfileSettingsFromJson(profileJson.optJSONObject("soarSettings")),
     )
 

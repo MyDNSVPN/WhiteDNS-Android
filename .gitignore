@@ -23,3 +23,18 @@ nemigam*
 /StormDNS/
 /.hallmark/
 /design.md
+
+# Local validation and scratch files; existing tracked tests stay tracked.
+**/*_test.go
+**/test/
+**/tests/
+**/testdata/
+**/src/test/
+**/src/androidTest/
+**/[Rr][Ee][Aa][Dd][Mm][Ee]*
+**/.cache/
+**/.bench/
+**/__pycache__/
+**/*.prof
+**/*.trace
+**/coverage/

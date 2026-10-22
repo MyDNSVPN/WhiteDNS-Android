@@ -56,7 +56,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.1'
+          go-version: '1.26.9'
           cache-dependency-path: |
             third_party/StormDNS/go.sum
             third_party/CottenDns/go.sum
@@ -77,6 +77,13 @@ jobs:
 
       - name: Verify native core versions
         run: python3 scripts/verify-cottendns-apks.py --native-only
+
+      - name: Test reviewed CottenDNS core
+        working-directory: third_party/CottenDns
+        run: |
+          go mod verify
+          go test ./... -count=1 -timeout 180s
+          go vet ./...
 
       - name: Test Soar engine
         working-directory: soar-engine

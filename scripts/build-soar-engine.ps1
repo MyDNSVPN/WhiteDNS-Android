@@ -35,7 +35,7 @@ try {
         $env:CC = '"' + $toolchain.Replace('\','/') + '" --target=' + $targets[$abi][1]
         $output = Join-Path $projectRoot "app/src/main/jniLibs/$abi/libsoar_client.so"
         Write-Host "Building Soar for $abi"
-        & go build -mod=readonly -trimpath -buildvcs=false -buildmode=pie -ldflags '-s -w -linkmode external -extldflags "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"' -o $output .
+        & go build -mod=readonly -trimpath -buildvcs=false -buildmode=pie '-ldflags=-s -w -linkmode external -extldflags=-Wl,-z,max-page-size=16384,-z,common-page-size=16384' -o $output .
         if ($LASTEXITCODE -ne 0) { throw "Soar build failed: $abi" }
     }
 } finally {
