@@ -44,7 +44,9 @@ private fun inferProgressPercent(
     return when {
         phase == "mtu" && total > 0 -> (10f + (completed.coerceIn(0, total).toFloat() / total) * 70f).roundToInt()
         phase == "starting" -> 5
+        phase == "authenticating" || phase == "retry" -> 10
         phase == "selecting" -> 85
+        phase == "verifying" -> 90
         phase == "session" -> 90
         phase == "runtime" -> 98
         phase == "connected" -> 100

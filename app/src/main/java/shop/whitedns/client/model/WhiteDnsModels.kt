@@ -647,6 +647,8 @@ data class ConnectionProgressState(
                 "Scanning"
             }
             "selecting" -> "Selecting resolver"
+            "authenticating" -> "Authenticating tunnel"
+            "verifying" -> "Verifying tunnel transfer"
             "session" -> "Starting session"
             "runtime" -> "Starting runtime"
             "retry" -> "Retrying"

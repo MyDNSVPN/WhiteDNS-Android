@@ -44,4 +44,30 @@ class StormDnsConnectionProgressTest {
         assertEquals("runtime", parseStormDnsConnectionProgressLine("WD_PROGRESS phase=runtime percent=98")?.phase)
     }
 
+    @Test
+    fun cottenMaxBootstrapStagesRemainVisibleUntilTransferIsVerified() {
+        val lines = listOf(
+            "WD_PROGRESS phase=starting percent=5 mode=cottenmax",
+            "WD_PROGRESS phase=authenticating percent=10 mode=cottenmax attempt=1",
+            "WD_PROGRESS phase=retry percent=10 mode=cottenmax stage=authenticating attempt=1",
+            "WD_PROGRESS phase=authenticating percent=10 mode=cottenmax attempt=2",
+            "WD_PROGRESS phase=verifying percent=90 mode=cottenmax attempt=2",
+            "WD_PROGRESS phase=connected percent=100 mode=cottenmax",
+        )
+        val states = lines.map { requireNotNull(parseStormDnsConnectionProgressLine(it)) }
+
+        assertEquals(listOf(5, 10, 10, 10, 90, 100), states.map { it.percent })
+        assertEquals("Authenticating tunnel", states[1].label)
+        assertEquals("Retrying", states[2].label)
+        assertEquals("Verifying tunnel transfer", states[4].label)
+        assertEquals(listOf(false, false, false, false, false, true), states.map { it.phase == "connected" })
+    }
+
+    @Test
+    fun cottenMaxBootstrapStagesInferPercentWhenCoreOmitsIt() {
+        assertEquals(10, parseStormDnsConnectionProgressLine("WD_PROGRESS phase=authenticating mode=cottenmax")?.percent)
+        assertEquals(10, parseStormDnsConnectionProgressLine("WD_PROGRESS phase=retry mode=cottenmax attempt=2")?.percent)
+        assertEquals(90, parseStormDnsConnectionProgressLine("WD_PROGRESS phase=verifying mode=cottenmax")?.percent)
+    }
+
 }
