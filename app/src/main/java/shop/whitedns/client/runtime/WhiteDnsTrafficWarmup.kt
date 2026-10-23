@@ -50,7 +50,7 @@ object WhiteDnsTrafficWarmup {
                 socket.soTimeout = SocketTimeoutMillis
                 socket.tcpNoDelay = true
                 socket.connect(
-                    InetSocketAddress(selectLocalSocksHost(settings.listenIp), settings.listenPort),
+                    InetSocketAddress(localProxyHost(settings.listenIp), settings.listenPort),
                     SocketTimeoutMillis,
                 )
                 val input = socket.getInputStream()
@@ -77,7 +77,7 @@ object WhiteDnsTrafficWarmup {
             socket.soTimeout = ThroughputSocketTimeoutMillis
             socket.tcpNoDelay = true
             socket.connect(
-                InetSocketAddress(selectLocalSocksHost(settings.listenIp), settings.listenPort),
+                InetSocketAddress(localProxyHost(settings.listenIp), settings.listenPort),
                 SocketTimeoutMillis,
             )
             val input = socket.getInputStream()
@@ -253,14 +253,6 @@ object WhiteDnsTrafficWarmup {
 
     private fun ByteArray.limitedToSocksField(): ByteArray {
         return copyOf(min(size, MaxSocksFieldLength))
-    }
-
-    private fun selectLocalSocksHost(listenIp: String): String {
-        return when (listenIp.trim().removeSurrounding("[", "]")) {
-            "", "0.0.0.0" -> "127.0.0.1"
-            "::" -> "::1"
-            else -> listenIp.trim().removeSurrounding("[", "]")
-        }
     }
 
     private data class HttpProbeTarget(
