@@ -65,6 +65,7 @@ android {
             // Go clients are already stripped; retain their verified executable bytes.
             keepDebugSymbols += "**/libcottendns_client.so"
             keepDebugSymbols += "**/libsoar_client.so"
+            keepDebugSymbols += "**/libtun2proxy.so"
             useLegacyPackaging = true
         }
         resources {

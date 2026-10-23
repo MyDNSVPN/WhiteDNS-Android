@@ -54,6 +54,13 @@ jobs:
             "ndk;${GRADLE_ANDROID_NDK_VERSION}" \
             "ndk;${STORMDNS_ANDROID_NDK_VERSION}"
 
+      - name: Build restart-safe Android VPN bridge
+        env:
+          NDK_HOST: linux-x86_64
+        run: |
+          set -euo pipefail
+          NDK_ROOT="${ANDROID_HOME}/ndk/${STORMDNS_ANDROID_NDK_VERSION}" bash scripts/build-tun2proxy-engine.sh
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -166,6 +173,9 @@ jobs:
 
       - name: Verify packaged CottenDNS cores
         run: python3 scripts/verify-cottendns-apks.py dist
+
+      - name: Verify packaged VPN native libraries
+        run: python3 scripts/verify-tun2proxy-native.py dist
 
       - name: Publish GitHub Release
         env:

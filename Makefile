@@ -26,7 +26,7 @@ COTTENDNS_LDFLAGS := $(STORMDNS_LDFLAGS) -X cottendns-go/internal/version.BuildV
 
 all: debug
 
-debug: stormdns cottendns soar
+debug: stormdns cottendns soar tun2proxy
 	$(GRADLE) :app:assembleDebug
 
 stormdns: stormdns-arm64 stormdns-armv7 stormdns-x86_64 stormdns-x86
@@ -36,6 +36,10 @@ cottendns: cottendns-arm64 cottendns-armv7 cottendns-x86_64 cottendns-x86
 .PHONY: soar
 soar:
 	NDK_ROOT="$(NDK_ROOT)" NDK_HOST="$(NDK_HOST)" ANDROID_API="$(ANDROID_API)" GO="$(GO)" bash scripts/build-soar-engine.sh
+
+.PHONY: tun2proxy
+tun2proxy:
+	NDK_ROOT="$(NDK_ROOT)" NDK_HOST="$(NDK_HOST)" ANDROID_API="$(ANDROID_API)" bash scripts/build-tun2proxy-engine.sh
 
 check-ndk:
 	@test -x "$(NDK_BIN)/aarch64-linux-android$(ANDROID_API)-clang" || (echo "Android NDK not found at $(NDK_ROOT). Install NDK $(NDK_VERSION) or set NDK_ROOT=/path/to/ndk."; exit 1)
