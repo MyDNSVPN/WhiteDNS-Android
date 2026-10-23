@@ -17,6 +17,10 @@ $saved = @{}
 foreach ($name in @('GOOS','GOARCH','GOARM','CGO_ENABLED','CC')) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 Push-Location (Join-Path $projectRoot 'soar-engine')
 try {
+    $goVersion = (& go env GOVERSION).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot determine the selected Go toolchain.' }
+    & python (Join-Path $projectRoot 'scripts/android_go_toolchain.py') $goVersion
+    if ($LASTEXITCODE -ne 0) { throw 'The selected Go toolchain does not support older Android devices.' }
     $moduleRoot = (& go list -m -f '{{.Dir}}' github.com/getlantern/soar).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot locate the pinned Soar module.' }
     foreach ($country in @('ir','global','cn','ru')) {
