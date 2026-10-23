@@ -29,10 +29,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.Inet4Address
-import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
-import java.net.Socket
 import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
@@ -82,6 +80,8 @@ import shop.whitedns.client.runtime.StormDnsTrafficAccounting
 import shop.whitedns.client.runtime.WhiteDnsRuntimeState
 import shop.whitedns.client.runtime.WhiteDnsRuntimeStateStore
 import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
+import shop.whitedns.client.runtime.canConnectToLocalProxy
+import shop.whitedns.client.model.hasConnectionResolverSource
 import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
 import shop.whitedns.client.runtime.formatTrafficSpeed
 import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
@@ -420,7 +420,7 @@ class WhiteDnsViewModel(
                 stopServerTestManagers()
             }
             val settings = uiState.settings.syncSelectedConnectionProfileFields()
-            if (settings.resolve().resolverEntries.isEmpty() && !settings.canDiscoverSoarResolvers() && !settings.canBootstrapResolversWithCottenMax()) {
+            if (!settings.hasConnectionResolverSource()) {
                 appendLog("Resolvers are required to connect")
                 activeRuntimeSessionId = ""
                 uiState = uiState.copy(
@@ -2266,19 +2266,20 @@ class WhiteDnsViewModel(
 
     private fun isRuntimeStateHealthy(state: WhiteDnsRuntimeState): Boolean {
         return when (state.mode) {
-            WhiteDnsRuntimeStateStore.ModeProxy -> state.listenPort > 0 && canConnectToLocalPort(state.listenPort)
+            WhiteDnsRuntimeStateStore.ModeProxy -> state.listenPort > 0 && canConnectToLocalPort(state.listenPort, state.listenIp)
             WhiteDnsRuntimeStateStore.ModeVpn -> state.listenPort > 0 &&
                 findVpnTrafficInterfaceName() != null &&
-                canConnectToLocalPort(state.listenPort)
+                canConnectToLocalPort(state.listenPort, state.listenIp)
             else -> false
         }
     }
 
     private fun isCurrentRuntimeHealthy(): Boolean {
-        return when (uiState.settings.resolve().connectionMode) {
-            WhiteDnsRuntimeStateStore.ModeProxy -> canConnectToLocalPort(activeProxyListenPort)
+        val settings = uiState.settings.runtimeConnectionSettings().resolve()
+        return when (settings.connectionMode) {
+            WhiteDnsRuntimeStateStore.ModeProxy -> canConnectToLocalPort(activeProxyListenPort, settings.listenIp)
             WhiteDnsRuntimeStateStore.ModeVpn -> findVpnTrafficInterfaceName() != null &&
-                canConnectToLocalPort(activeProxyListenPort)
+                canConnectToLocalPort(activeProxyListenPort, settings.listenIp)
             else -> false
         }
     }
@@ -2630,7 +2631,7 @@ class WhiteDnsViewModel(
         if (resolvedSettings.connectionMode != expectedConnectionMode) {
             return failedVerification("Connection mode changed before verification finished")
         }
-        if (!canConnectToLocalPort(activeProxyListenPort)) {
+        if (!canConnectToLocalPort(activeProxyListenPort, resolvedSettings.listenIp)) {
             return failedVerification("Connection verification failed: local SOCKS listener is not reachable")
         }
         if (expectedConnectionMode == WhiteDnsRuntimeStateStore.ModeVpn && findVpnTrafficInterfaceName() == null) {
@@ -2815,17 +2816,8 @@ class WhiteDnsViewModel(
         }.getOrNull()
     }
 
-    private fun canConnectToLocalPort(port: Int): Boolean {
-        if (port !in 1..65535) {
-            return false
-        }
-        return runCatching {
-            Socket().use { socket ->
-                socket.connect(InetSocketAddress("127.0.0.1", port), 300)
-            }
-            true
-        }.getOrDefault(false)
-    }
+    private fun canConnectToLocalPort(port: Int, listenIp: String = "127.0.0.1"): Boolean =
+        canConnectToLocalProxy(listenIp, port)
 
     private fun readNetworkInterfaceCounters(interfaceName: String): Pair<Long, Long>? {
         if (!SafeNetworkInterfaceNameRegex.matches(interfaceName)) {

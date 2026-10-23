@@ -13,8 +13,6 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +42,8 @@ import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
+import shop.whitedns.client.runtime.canConnectToLocalProxy
+import shop.whitedns.client.runtime.localProxyHost
 import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
 import shop.whitedns.client.runtime.WhiteDnsRuntimeStateStore
 import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
@@ -153,7 +153,7 @@ class WhiteDnsProxyService : Service() {
 
                     stopProxyRuntime()
                     WhiteDnsVpnService.stop(applicationContext)
-                    waitForLocalPortToClose(resolvedSettings.listenPort)
+                    waitForLocalPortToClose(resolvedSettings.listenIp, resolvedSettings.listenPort)
                     runtimeReady = false
                     lastTrafficNotificationUpdateMillis = 0L
                     WhiteDnsRuntimeStateStore.markStarting(
@@ -225,6 +225,7 @@ class WhiteDnsProxyService : Service() {
             }
         }
         waitForProxyPort(
+            listenIp = resolvedSettings.listenIp,
             listenPort = resolvedSettings.listenPort,
             startupFailure = { startupFailure.get() },
             tunnelReady = { tunnelReady.get() },
@@ -248,7 +249,7 @@ class WhiteDnsProxyService : Service() {
             httpProxyBridge.start(
                 listenHost = resolvedSettings.listenIp,
                 listenPort = resolvedSettings.httpProxyPort,
-                socksHost = selectLocalSocksHost(resolvedSettings.listenIp),
+                socksHost = localProxyHost(resolvedSettings.listenIp),
                 socksPort = resolvedSettings.listenPort,
                 socksUsername = if (resolvedSettings.socks5Authentication) resolvedSettings.socksUsername else null,
                 socksPassword = if (resolvedSettings.socks5Authentication) resolvedSettings.socksPassword else null,
@@ -260,6 +261,7 @@ class WhiteDnsProxyService : Service() {
     }
 
     private suspend fun waitForProxyPort(
+        listenIp: String,
         listenPort: Int,
         startupFailure: () -> String?,
         tunnelReady: () -> Boolean,
@@ -274,16 +276,16 @@ class WhiteDnsProxyService : Service() {
                     "DNS engine process exited before SOCKS was ready${exitCode?.let { " (exit code $it)" }.orEmpty()}",
                 )
             }
-            if (tunnelReady() && canConnectToLocalPort(listenPort)) {
+            if (tunnelReady() && canConnectToLocalProxy(listenIp, listenPort)) {
                 return
             }
             delay(500)
         }
     }
 
-    private suspend fun waitForLocalPortToClose(port: Int) {
+    private suspend fun waitForLocalPortToClose(listenIp: String, port: Int) {
         val deadline = System.currentTimeMillis() + PreviousRuntimeStopTimeoutMillis
-        while (canConnectToLocalPort(port)) {
+        while (canConnectToLocalProxy(listenIp, port)) {
             if (System.currentTimeMillis() >= deadline) {
                 throw IllegalStateException("Previous local proxy listener is still active on port $port")
             }
@@ -301,15 +303,6 @@ class WhiteDnsProxyService : Service() {
             }
             delay(1_000)
         }
-    }
-
-    private fun canConnectToLocalPort(port: Int): Boolean {
-        return runCatching {
-            Socket().use { socket ->
-                socket.connect(InetSocketAddress("127.0.0.1", port), 300)
-            }
-            true
-        }.getOrDefault(false)
     }
 
     private fun detectStormDnsStartupFailure(line: String): String? {
@@ -365,14 +358,6 @@ class WhiteDnsProxyService : Service() {
     private fun stopTrafficKeepalive() {
         keepaliveJob?.cancel()
         keepaliveJob = null
-    }
-
-    private fun selectLocalSocksHost(listenIp: String): String {
-        return when (listenIp.trim().removeSurrounding("[", "]")) {
-            "", "0.0.0.0" -> "127.0.0.1"
-            "::" -> "::1"
-            else -> listenIp.trim().removeSurrounding("[", "]")
-        }
     }
 
     private fun enterForeground(statusText: String) {
