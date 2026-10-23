@@ -63,7 +63,7 @@ object WhiteDnsTrafficWarmup {
                 }
                 output.write(ProbeHttpRequest)
                 output.flush()
-                hasHttpStatusResponse(input)
+                hasHttpStatusResponse(input, SocketTimeoutMillis)
             }
         }.getOrDefault(false)
     }
@@ -326,9 +326,11 @@ object WhiteDnsTrafficWarmup {
 
 // Receiving SOCKS CONNECT success only proves the local proxy accepted the
 // stream. Require a bounded HTTP status line from the remote side as well.
-internal fun hasHttpStatusResponse(input: InputStream): Boolean {
+internal fun hasHttpStatusResponse(input: InputStream, timeoutMillis: Int): Boolean {
     val line = StringBuilder()
+    val deadline = System.nanoTime() + timeoutMillis.toLong() * 1_000_000L
     repeat(512) {
+        if (System.nanoTime() >= deadline) return false
         val next = input.read()
         if (next < 0) return false
         if (next == '\n'.code) {
