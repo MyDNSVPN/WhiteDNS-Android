@@ -63,10 +63,7 @@ object WhiteDnsTrafficWarmup {
                 }
                 output.write(ProbeHttpRequest)
                 output.flush()
-                runCatching {
-                    input.read(ByteArray(ProbeReadBufferSize))
-                }
-                true
+                hasHttpStatusResponse(input)
             }
         }.getOrDefault(false)
     }
@@ -287,7 +284,6 @@ object WhiteDnsTrafficWarmup {
     private const val ThroughputSocketTimeoutMillis = 5_000
     private const val ThroughputProbeMaxBytes = 512L * 1024L
     private const val ThroughputProbeMaxDurationMillis = 5_000L
-    private const val ProbeReadBufferSize = 256
     private const val ThroughputReadBufferSize = 8192
     private const val MaxSocksFieldLength = 255
     private const val PortLength = 2
@@ -326,4 +322,20 @@ object WhiteDnsTrafficWarmup {
             "User-Agent: WhiteDNS/1\r\n" +
             "\r\n"
         ).toByteArray(Charsets.US_ASCII)
+}
+
+// Receiving SOCKS CONNECT success only proves the local proxy accepted the
+// stream. Require a bounded HTTP status line from the remote side as well.
+internal fun hasHttpStatusResponse(input: InputStream): Boolean {
+    val line = StringBuilder()
+    repeat(512) {
+        val next = input.read()
+        if (next < 0) return false
+        if (next == '\n'.code) {
+            return Regex("HTTP/1\\.[01] [1-5][0-9]{2}(?: .*)?").matches(line.toString().trimEnd('\r'))
+        }
+        if (next != '\r'.code && next !in 32..126) return false
+        line.append(next.toChar())
+    }
+    return false
 }

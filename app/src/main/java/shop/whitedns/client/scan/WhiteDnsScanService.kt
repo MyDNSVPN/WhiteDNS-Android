@@ -553,13 +553,15 @@ class WhiteDnsScanService : Service() {
 
     private fun writeScanResults(scanRoot: File, engine: String, state: WhiteDnsScanState) {
         val resultsDir = File(scanRoot, "results").apply { mkdirs() }
-        val scannerResultResolvers = WhiteDnsScannerResultStore.mergeValidResolvers(
+        WhiteDnsScannerResultStore.mergeValidResolvers(
             applicationContext,
             engine,
             state.validResolverEntries,
         )
         File(resultsDir, WhiteDnsScannerResultStore.ResultFileName).writeText(
-            scannerResultResolvers.joinToString(separator = "\n"),
+            // The history cache is a candidate archive, never this scan's
+            // proof for its particular server, tunnel mode and transport.
+            state.validResolverEntries.joinToString(separator = "\n"),
             Charsets.UTF_8,
         )
         File(resultsDir, "valid_resolvers.txt").writeText(

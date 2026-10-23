@@ -93,6 +93,7 @@ import shop.whitedns.client.scan.WhiteDnsScanService
 import shop.whitedns.client.scan.WhiteDnsScanSettingsStore
 import shop.whitedns.client.scan.WhiteDnsScanStateStore
 import shop.whitedns.client.scan.WhiteDnsScannerResultStore
+import shop.whitedns.client.scan.completedScanResolversForAutoSave
 import shop.whitedns.client.storm.StormDnsBuiltInPool
 import shop.whitedns.client.storm.StormDnsProcessManager
 import shop.whitedns.client.vpn.WhiteDnsVpnService
@@ -146,7 +147,9 @@ class WhiteDnsViewModel(
     private var scanStateRefreshJob: Job? = null
     private val subscriptionMutex = Mutex()
     private var lastAutomaticSubscriptionAttempt = 0L
-    private var lastScannerResultProfileText = ""
+    // Opening the app or connecting must not replay old scan results over a
+    // resolver profile that the user has since edited.
+    private var lastScannerResultSessionId = scanSettingsStore.loadHandledResultSessionId(initialScanState)
     private var activeServerProfile: StormDnsServerProfile? = null
     private var activeRuntimeSessionId: String = ""
     private var activeProxyListenPort: Int = WhiteDnsRuntimeProxy.ListenPortInt
@@ -161,7 +164,6 @@ class WhiteDnsViewModel(
     private val serverTestManagersLock = Any()
     private var serverTestManagers: List<StormDnsProcessManager> = emptyList()
     private var lastProgressUiUpdateMillis = 0L
-    private var lastResolverUiUpdateMillis = 0L
     private val socksStreamTrackerLock = Any()
     private val socksStreamLastSeenMillis = mutableMapOf<Int, Long>()
     private val proxyEventListener: (WhiteDnsProxyEvent) -> Unit = { event ->
@@ -1929,8 +1931,17 @@ class WhiteDnsViewModel(
                     updatedSettings = syncScannerResultProfile(currentSettings, scanState),
                 )
             }
+            val updatedSettings = refreshResult.updatedSettings
+                ?.takeIf { uiState.settings == currentSettings }
+            if (updatedSettings != null) {
+                if (updatedSettings != currentSettings) settingsStore.save(updatedSettings)
+                lastScannerResultSessionId = refreshResult.scanState.sessionId
+                scanSettingsStore.saveHandledResultSessionId(lastScannerResultSessionId)
+            }
+            // A scan refresh must not overwrite settings edited while its
+            // disk read was in flight. A later refresh can retry the autosave.
             uiState = uiState.copy(
-                settings = refreshResult.updatedSettings ?: uiState.settings,
+                settings = updatedSettings ?: uiState.settings,
                 scanState = refreshResult.scanState,
             )
         }
@@ -1965,7 +1976,7 @@ class WhiteDnsViewModel(
             val processed = (validEntries + rejectedEntries).toSet()
             val sessionId = UUID.randomUUID().toString()
             val scanEngine = DnsClientEngine.normalize(
-                uiState.settings.selectedConnectionProfile().engine,
+                runtimeRequest.serverProfile.engine,
             )
             val resolverFile = File(
                 File(File(appContext.noBackupFilesDir, "$scanEngine/scan"), sessionId).apply { mkdirs() },
@@ -1973,13 +1984,13 @@ class WhiteDnsViewModel(
             )
             val remainingResolverCount = withContext(Dispatchers.IO) {
                 runCatching {
-                    val excludedResolvers = processed +
-                        WhiteDnsScannerResultStore.readValidResolverSet(appContext, scanEngine)
                     File(scanRequest.resolverFilePath).bufferedReader(Charsets.UTF_8).useLines { lines ->
                         WhiteDnsScannerResultStore.writePendingScanResolverFile(
                             lines = lines,
                             outputFile = resolverFile,
-                            excludedResolvers = excludedResolvers,
+                            // Only this resumed session's completed probes are
+                            // proof. Older engine/network/profile caches are not.
+                            excludedResolvers = processed,
                         )
                     }.pendingResolverCount
                 }
@@ -2487,25 +2498,26 @@ class WhiteDnsViewModel(
         currentSettings: WhiteDnsSettings,
         scanState: WhiteDnsScanState,
     ): WhiteDnsSettings? {
-        if (scanState.isRunning) {
-            return null
-        }
-        val scannerResultEngine = DnsClientEngine.normalize(
-            currentSettings.selectedConnectionProfile().engine,
-        )
-        val scannerResultText = WhiteDnsScannerResultStore
-            .readValidResolvers(appContext, scannerResultEngine)
-            .joinToString(separator = "\n")
-        if (scannerResultText.isBlank() || scannerResultText == lastScannerResultProfileText) {
-            return null
-        }
+        val entries = completedScanResolversForAutoSave(scanState, lastScannerResultSessionId)
+        if (entries.isEmpty()) return null
+        val request = RuntimeLaunchRequestStore.load(appContext, scanState.sessionId) ?: return null
+        val scannedProfile = request.settings.selectedConnectionProfile()
+        if (request.serverProfile.id != scannedProfile.id ||
+            DnsClientEngine.normalize(request.serverProfile.engine) != DnsClientEngine.normalize(scannedProfile.engine) ||
+            currentSettings.normalizedConnectionProfiles().none {
+                it.id == scannedProfile.id && it.engine == scannedProfile.engine &&
+                    it.customServerDomain == scannedProfile.customServerDomain &&
+                    it.customServerEncryptionKey == scannedProfile.customServerEncryptionKey &&
+                    it.cottenSettings == scannedProfile.cottenSettings && it.soarSettings == scannedProfile.soarSettings
+            }
+        ) return null
+        val scannerResultText = entries.joinToString(separator = "\n")
 
         val normalizedSettings = currentSettings.syncSelectedConnectionProfileFields()
         val resolverProfiles = normalizedSettings.normalizedResolverProfiles()
         val existingIndex = resolverProfiles.indexOfFirst { it.name == ScannerResultProfileName }
         if (existingIndex >= 0 && resolverProfiles[existingIndex].resolverText == scannerResultText) {
-            lastScannerResultProfileText = scannerResultText
-            return null
+            return currentSettings
         }
 
         val scannerResultProfile = if (existingIndex >= 0) {
@@ -2527,8 +2539,6 @@ class WhiteDnsViewModel(
         val updatedSettings = normalizedSettings.copy(
             resolverProfiles = updatedProfiles,
         ).syncSelectedConnectionProfileFields()
-        settingsStore.save(updatedSettings)
-        lastScannerResultProfileText = scannerResultText
         return updatedSettings
     }
 
@@ -2630,20 +2640,15 @@ class WhiteDnsViewModel(
         val probePassed = repeatBooleanAttempt(VerificationProbeAttempts) {
             WhiteDnsTrafficWarmup.verifySocksRoute(resolvedSettings)
         }
+        if (!probePassed) {
+            return failedVerification("Connection verification failed: no HTTP reply received through the tunnel")
+        }
         return ConnectionVerificationState(
             status = ConnectionVerificationStatus.Verified,
-            message = if (probePassed) {
-                if (expectedConnectionMode == WhiteDnsRuntimeStateStore.ModeVpn) {
-                    "Connection verified: VPN tunnel can reach the internet"
-                } else {
-                    "Connection verified: proxy tunnel can reach the internet"
-                }
+            message = if (expectedConnectionMode == WhiteDnsRuntimeStateStore.ModeVpn) {
+                "Connection verified: VPN tunnel can reach the internet"
             } else {
-                if (expectedConnectionMode == WhiteDnsRuntimeStateStore.ModeVpn) {
-                    "Connection ready: VPN tunnel is active; outbound probe is still warming up"
-                } else {
-                    "Connection ready: proxy tunnel is active; outbound probe is still warming up"
-                }
+                "Connection verified: proxy tunnel can reach the internet"
             },
             checkedAtMillis = System.currentTimeMillis(),
         )
@@ -2860,27 +2865,15 @@ class WhiteDnsViewModel(
 
     private fun updateResolverStateOnMain(resolverState: ResolverRuntimeState) {
         val currentState = uiState.resolverRuntimeState
-        val nextState = resolverState.withMergedValidResolvers(currentState.validResolvers)
+        // WD_RESOLVERS is a complete engine snapshot, including valid=-. Do
+        // not keep peers from an earlier state after the engine removes them.
+        val nextState = resolverState
         if (nextState == currentState) {
             return
         }
-        val now = System.currentTimeMillis()
-        val firstVisibleState = currentState == ResolverRuntimeState()
-        if (!firstVisibleState && now - lastResolverUiUpdateMillis < RuntimeResolverUiUpdateIntervalMillis) {
-            return
-        }
-        lastResolverUiUpdateMillis = now
+        // Every changed snapshot is meaningful membership information. In
+        // particular, dropping valid=- would leave removed peers on screen.
         uiState = uiState.copy(resolverRuntimeState = nextState)
-    }
-
-    private fun ResolverRuntimeState.withMergedValidResolvers(
-        currentValidResolvers: List<String>,
-    ): ResolverRuntimeState {
-        if (currentValidResolvers.isEmpty()) {
-            return this
-        }
-        val mergedValidResolvers = (currentValidResolvers + validResolvers).distinct()
-        return copy(validResolvers = mergedValidResolvers)
     }
 
     private fun countActiveProxyClients(listenPort: Int): Int {
@@ -2962,7 +2955,6 @@ class WhiteDnsViewModel(
 
     private fun resetRuntimeUiThrottles() {
         lastProgressUiUpdateMillis = 0L
-        lastResolverUiUpdateMillis = 0L
     }
 
     private fun resetTrafficAccounting() {
@@ -3041,7 +3033,6 @@ class WhiteDnsViewModel(
     private companion object {
         const val MaxConnectionLogs = 100
         const val RuntimeProgressUiUpdateIntervalMillis = 250L
-        const val RuntimeResolverUiUpdateIntervalMillis = 500L
         const val EstablishedTcpState = "01"
         const val VpnStopBeforeStormDnsStopDelayMillis = 1_500L
         const val SocksStreamTrackingTtlMillis = 120_000L
