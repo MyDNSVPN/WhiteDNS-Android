@@ -33,7 +33,7 @@ class ScanResolverChunkerTest {
     }
 
     @Test
-    fun normalizeScanResolverTextStripsPortsBeforeScanning() {
+    fun normalizeScanResolverTextPreservesNonDefaultPortsBeforeScanning() {
         val validation = WhiteDnsScannerResultStore.normalizeScanResolverText(
             """
             1.1.1.1:52
@@ -47,11 +47,11 @@ class ScanResolverChunkerTest {
         assertEquals(emptyList<String>(), validation.invalidEntries)
         assertEquals(
             listOf(
-                "1.1.1.1",
+                "1.1.1.1:52",
                 "8.8.8.8",
-                "9.9.9.9",
-                "192.168.10.0/30",
-                "2001:4860:4860:0:0:0:0:8888",
+                "9.9.9.9:5353",
+                "192.168.10.0/30:5300",
+                "[2001:4860:4860:0:0:0:0:8888]:5353",
             ),
             validation.normalizedResolvers,
         )
@@ -112,7 +112,7 @@ class ScanResolverChunkerTest {
             ),
             summary,
         )
-        assertEquals("1.1.1.1\n9.9.9.9", outputFile.readText(Charsets.UTF_8))
+        assertEquals("1.1.1.1\n9.9.9.9:5353", outputFile.readText(Charsets.UTF_8))
     }
 
     @Test

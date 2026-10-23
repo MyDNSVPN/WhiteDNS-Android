@@ -7,42 +7,30 @@ import java.io.FileOutputStream
 import java.io.IOException
 import shop.whitedns.client.model.DnsClientEngine
 import shop.whitedns.client.model.ResolverTextValidation
+import shop.whitedns.client.model.WhiteDnsScanState
+import shop.whitedns.client.model.WhiteDnsScanStatus
 import shop.whitedns.client.model.validateResolverText
 
 object WhiteDnsScannerResultStore {
     const val ResultFileName = "Scanner result"
     private val ResultFileLock = Any()
 
-    /** Engines write only to their own store; reads span all of them. */
-    private val AllEngines = listOf(DnsClientEngine.StormDns, DnsClientEngine.CottenDns, DnsClientEngine.Soar)
-
     /** The store this engine owns. Only this engine ever writes here. */
     fun resultFile(context: Context, engine: String): File {
         return File(resultDirectory(context, engine), ResultFileName)
     }
 
-    /**
-     * Every engine's scanned resolvers, this engine's own first.
-     *
-     * Storage stays per engine so each one's results are still its own, but a
-     * resolver another engine already reached is worth trying: both tunnel over
-     * the same resolvers, and validity only really diverges under opt-in DoT/DoH
-     * or unusual query types. Reading only one store also starves an engine's
-     * early-start threshold — StormDNS needs 8 valid resolvers before it
-     * fast-connects, so a half-filled store silently costs Fast Connect.
-     */
+    /** A result from another engine is a candidate, not a validated path here. */
     fun readValidResolvers(context: Context, engine: String): List<String> {
         return readValidResolverSet(context, engine).toList()
     }
 
     fun readValidResolverSet(context: Context, engine: String): Set<String> {
-        if (DnsClientEngine.normalize(engine) == DnsClientEngine.Soar) return readEngineStore(context, DnsClientEngine.Soar)
-        val ordered = LinkedHashSet<String>()
-        ordered += readEngineStore(context, engine)
-        AllEngines.filterNot { it == DnsClientEngine.Soar || DnsClientEngine.normalize(it) == DnsClientEngine.normalize(engine) }
-            .forEach { other -> ordered += readEngineStore(context, other) }
-        return ordered
+        return readScopedResolverSet(engine) { readEngineStore(context, it) }
     }
+
+    internal fun readScopedResolverSet(engine: String, readStore: (String) -> Set<String>): Set<String> =
+        readStore(DnsClientEngine.normalize(engine))
 
     /** Just one engine's store, for the write path, which must stay scoped. */
     private fun readEngineStore(context: Context, engine: String): Set<String> {
@@ -59,8 +47,7 @@ object WhiteDnsScannerResultStore {
     }
 
     /**
-     * Folds newly scanned resolvers into this engine's own store, then returns
-     * the full cross-engine view for display.
+     * Folds newly scanned resolvers into this engine's own store.
      */
     fun mergeValidResolvers(context: Context, engine: String, resolvers: Iterable<String>): List<String> {
         val incomingResolvers = normalizeResolverEntries(resolvers)
@@ -280,11 +267,11 @@ object WhiteDnsScannerResultStore {
     private fun stripScanResolverPort(resolver: String): String {
         val text = resolver.trim()
         val bracketedMatch = BracketedResolverPortRegex.matchEntire(text)
-        if (bracketedMatch != null) {
+        if (bracketedMatch != null && bracketedMatch.groupValues[2] == "53") {
             return bracketedMatch.groupValues[1]
         }
         val hostPortMatch = ResolverPortRegex.matchEntire(text)
-        if (hostPortMatch != null) {
+        if (hostPortMatch != null && hostPortMatch.groupValues[2] == "53") {
             return hostPortMatch.groupValues[1]
         }
         return text
@@ -292,6 +279,14 @@ object WhiteDnsScannerResultStore {
 
     private val BracketedResolverPortRegex = Regex("""^\[([^]]+)]:(\d{1,5})$""")
     private val ResolverPortRegex = Regex("""^([^:]+):(\d{1,5})$""")
+}
+
+internal fun completedScanResolversForAutoSave(state: WhiteDnsScanState, handledSessionId: String): List<String> {
+    if (state.status != WhiteDnsScanStatus.Completed || state.sessionId.isBlank() ||
+        state.sessionId == handledSessionId || state.startedAtMillis <= 0 ||
+        state.completedResolvers < state.totalResolvers
+    ) return emptyList()
+    return WhiteDnsScannerResultStore.normalizeResolverEntries(state.validResolverEntries)
 }
 
 data class ScanResolverFileSummary(

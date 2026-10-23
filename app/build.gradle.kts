@@ -5,9 +5,9 @@ plugins {
 
 val whiteDnsVersionCode = providers.gradleProperty("WHITE_DNS_VERSION_CODE")
     .map { it.toInt() }
-    .orElse(32)
+    .orElse(35)
 val whiteDnsVersionName = providers.gradleProperty("WHITE_DNS_VERSION_NAME")
-    .orElse("1.6.10-beta1")
+    .orElse("1.6.12-beta1")
 
 android {
     namespace = "shop.whitedns.client"
@@ -65,6 +65,7 @@ android {
             // Go clients are already stripped; retain their verified executable bytes.
             keepDebugSymbols += "**/libcottendns_client.so"
             keepDebugSymbols += "**/libsoar_client.so"
+            keepDebugSymbols += "**/libtun2proxy.so"
             useLegacyPackaging = true
         }
         resources {

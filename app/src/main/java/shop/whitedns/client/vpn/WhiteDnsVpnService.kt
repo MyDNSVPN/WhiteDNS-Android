@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -12,14 +11,13 @@ import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
-import android.system.Os
-import android.system.OsConstants
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +28,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import shop.whitedns.client.MainActivity
 import shop.whitedns.client.R
 import shop.whitedns.client.model.DnsClientEngine
@@ -42,9 +41,6 @@ import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
 import shop.whitedns.client.model.usesCottenMax
 import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
 import shop.whitedns.client.model.WhiteDnsSettings
-import shop.whitedns.client.model.canBootstrapResolversWithCottenMax
-import shop.whitedns.client.model.usesCottenMax
-import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
 import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
@@ -62,10 +58,12 @@ class WhiteDnsVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var foregroundStarted = false
     private var startJob: Job? = null
+    private var shutdownJob: Job? = null
     private var keepaliveJob: Job? = null
     private var runtimeReady = false
     private var lastTrafficNotificationUpdateMillis = 0L
     private var currentSessionId = ""
+    private val lifecycleGeneration = AtomicLong()
     @Volatile
     private var stopping = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -83,10 +81,7 @@ class WhiteDnsVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ActionStop -> {
-                startJob?.cancel()
-                stopVpn()
-                exitForeground()
-                stopSelf()
+                requestShutdown()
                 START_NOT_STICKY
             }
             else -> {
@@ -96,9 +91,7 @@ class WhiteDnsVpnService : VpnService() {
                     START_REDELIVER_INTENT
                 } catch (error: Exception) {
                     logError("Failed to start foreground VPN service", error)
-                    stopVpn()
-                    exitForeground()
-                    stopSelf()
+                    requestShutdown()
                     START_NOT_STICKY
                 }
             }
@@ -106,11 +99,49 @@ class WhiteDnsVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        stopping = true
+        lifecycleGeneration.incrementAndGet()
         startJob?.cancel()
-        stopVpn()
+        stopTrafficKeepalive()
+        // Native shutdown and child-process joins can take seconds. Never hold
+        // Android's main thread while the system destroys the VPN service.
+        val oldInterface = vpnInterface
+        vpnInterface = null
+        Thread {
+            runCatching { tun2SocksProcessManager.requestStop() }
+            runCatching { oldInterface?.close() }
+            runCatching { tun2SocksProcessManager.stop(Tun2proxyStopGracePeriodMillis) }
+            runCatching { stormDnsProcessManager.stop() }
+        }.apply {
+            name = "whitedns-vpn-destroy-cleanup"
+            isDaemon = true
+            start()
+        }
         exitForeground()
         serviceScope.cancel()
         super.onDestroy()
+    }
+
+    override fun onRevoke() {
+        ContextCompat.getMainExecutor(this).execute { requestShutdown() }
+    }
+
+    private fun requestShutdown() {
+        stopping = true
+        val generation = lifecycleGeneration.incrementAndGet()
+        val activeStart = startJob
+        val previousShutdown = shutdownJob
+        activeStart?.cancel()
+        shutdownJob = serviceScope.launch {
+            previousShutdown?.join()
+            activeStart?.join()
+            // A newer connect request owns its own teardown/start sequence.
+            if (lifecycleGeneration.get() != generation) return@launch
+            stopVpn()
+            if (lifecycleGeneration.get() != generation) return@launch
+            exitForeground()
+            stopSelf()
+        }
     }
 
     private fun enterForeground(statusText: String) {
@@ -201,9 +232,15 @@ class WhiteDnsVpnService : VpnService() {
 
     private fun startVpn(intent: Intent?) {
         val previousJob = startJob
+        val previousShutdown = shutdownJob
+        val generation = lifecycleGeneration.incrementAndGet()
         val sessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
         startJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
+            // A disconnect may already be inside native teardown. Join it
+            // before new resources reuse the manager or a descriptor number.
+            previousShutdown?.join()
+            if (lifecycleGeneration.get() != generation) return@launch
             currentSessionId = sessionId
             try {
                 val launchRequest = RuntimeLaunchRequestStore.load(applicationContext, sessionId)
@@ -322,6 +359,9 @@ class WhiteDnsVpnService : VpnService() {
 
     private suspend fun monitorStormDnsProcess() {
         while (true) {
+            if (!tun2SocksProcessManager.isRunning()) {
+                throw IllegalStateException("tun2proxy stopped while VPN was active")
+            }
             if (!stormDnsProcessManager.isRunning()) {
                 val exitCode = stormDnsProcessManager.exitCodeOrNull()
                 throw IllegalStateException(
@@ -332,86 +372,95 @@ class WhiteDnsVpnService : VpnService() {
         }
     }
 
-    private fun startVpnRouting(
+    private suspend fun startVpnRouting(
         sessionId: String,
         settings: WhiteDnsSettings,
         resolvedSettings: ResolvedWhiteDnsSettings,
     ) {
-        try {
-            val socksHost = selectVpnSocksHost(resolvedSettings.listenIp)
-            val socksPort = resolvedSettings.listenPort
-            val socksUsername = if (resolvedSettings.socks5Authentication) {
-                resolvedSettings.socksUsername
-            } else {
-                null
-            }
-            val socksPassword = if (resolvedSettings.socks5Authentication) {
-                resolvedSettings.socksPassword
-            } else {
-                null
-            }
-            logInfo("Preparing Android VPN interface with virtual DNS")
-            val tun = Builder()
-                .setSession("WhiteDNS")
-                .setMtu(VpnMtu)
-                .addAddress(TunIpv4Address, TunIpv4PrefixLength)
-                .addDnsServer(TunDnsServer)
-                .addRoute(TunDnsServer, 32)
-                .addRoute("0.0.0.0", 0)
-                .apply {
-                    configureSplitTunnelApplications(
-                        splitTunnelMode = resolvedSettings.splitTunnelMode,
-                        splitTunnelPackages = resolvedSettings.splitTunnelPackages,
-                    )
-                }
-                .establish()
-                ?: throw IllegalStateException("Failed to establish WhiteDNS VPN interface")
-
-            vpnInterface = tun
-            clearCloseOnExec(tun)
-            val tunFd = tun.fd
-            logInfo("Routing device traffic to SOCKS $socksHost:$socksPort")
-            tun2SocksProcessManager.start(
-                tunFileDescriptor = tunFd,
-                closeTunFileDescriptorOnDrop = false,
-                socksHost = socksHost,
-                socksPort = socksPort,
-                socksUsername = socksUsername,
-                socksPassword = socksPassword,
-                onOutput = { line ->
-                    logInfo("tun2proxy: $line")
-                },
-                onExit = { exitCode ->
-                    if (stopping) {
-                        Log.i(Tag, "tun2proxy stopped with code $exitCode")
-                    } else {
-                        val message = "tun2proxy exited with code $exitCode"
-                        serviceScope.launch {
-                            failAndStopVpn(message)
-                        }
-                    }
-                },
-            )
-            updateForegroundNotification("Full-device VPN is active")
-            runtimeReady = true
-            WhiteDnsRuntimeStateStore.markReady(
-                context = applicationContext,
-                settings = settings,
-                sessionId = sessionId,
-                message = "Full-device VPN routing started",
-            )
-            reportReady("Full-device VPN routing started")
-            startTrafficKeepalive(resolvedSettings)
-        } catch (error: Exception) {
-            failAndStopVpn("Failed to start WhiteDNS VPN", error)
+        val socksHost = selectVpnSocksHost(resolvedSettings.listenIp)
+        val socksPort = resolvedSettings.listenPort
+        val socksUsername = if (resolvedSettings.socks5Authentication) {
+            resolvedSettings.socksUsername
+        } else {
+            null
         }
+        val socksPassword = if (resolvedSettings.socks5Authentication) {
+            resolvedSettings.socksPassword
+        } else {
+            null
+        }
+        logInfo("Preparing Android VPN interface with virtual DNS")
+        val tun = Builder()
+            .setSession("WhiteDNS")
+            .setMtu(VpnMtu)
+            .addAddress(TunIpv4Address, TunIpv4PrefixLength)
+            .addAddress(TunIpv6Address, 128)
+            .addDnsServer(TunDnsServer)
+            .addRoute(TunDnsServer, 32)
+            .addRoute("0.0.0.0", 0)
+            .addRoute("::", 0)
+            .apply {
+                configureSplitTunnelApplications(
+                    splitTunnelMode = resolvedSettings.splitTunnelMode,
+                    splitTunnelPackages = resolvedSettings.splitTunnelPackages,
+                )
+            }
+            .establish()
+            ?: throw IllegalStateException("Failed to establish WhiteDNS VPN interface")
+
+        vpnInterface = tun
+        // tun2proxy is JNI in this process. Keep CLOEXEC set so a later
+        // native-engine child cannot retain the TUN after VPN teardown.
+        val tunFd = tun.fd
+        logInfo("Routing device traffic to SOCKS $socksHost:$socksPort")
+        tun2SocksProcessManager.start(
+            tunFileDescriptor = tunFd,
+            closeTunFileDescriptorOnDrop = false,
+            socksHost = socksHost,
+            socksPort = socksPort,
+            socksUsername = socksUsername,
+            socksPassword = socksPassword,
+            onOutput = { line ->
+                logInfo("tun2proxy: $line")
+            },
+            onExit = { exitCode ->
+                if (stopping) {
+                    Log.i(Tag, "tun2proxy stopped with code $exitCode")
+                } else {
+                    // Startup and the monitor own state transitions. An
+                    // asynchronous failure callback used to race markReady.
+                    logWarning("tun2proxy exited with code $exitCode")
+                }
+            },
+        )
+        if (!tun2SocksProcessManager.awaitRunning(Tun2proxyStartupTimeoutMillis)) {
+            throw IllegalStateException("tun2proxy exited before VPN routing became ready")
+        }
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        if (stopping) throw CancellationException("VPN start was cancelled")
+        updateForegroundNotification("Full-device VPN is active")
+        runtimeReady = true
+        WhiteDnsRuntimeStateStore.markReady(
+            context = applicationContext,
+            settings = settings,
+            sessionId = sessionId,
+            message = "Full-device VPN routing started",
+        )
+        reportReady("Full-device VPN routing started")
+        startTrafficKeepalive(resolvedSettings)
     }
 
-    private fun stopVpn() {
+    private fun stopVpn(preserveFailure: Boolean = false) {
         stopping = true
         runtimeReady = false
         lastTrafficNotificationUpdateMillis = 0L
         stopTrafficKeepalive()
+        runCatching { tun2SocksProcessManager.requestStop() }
+        val interfaceToClose = vpnInterface
+        vpnInterface = null
+        runCatching { interfaceToClose?.close() }.onFailure { error ->
+            Log.w(Tag, "Failed to close VPN interface", error)
+        }
         runCatching {
             val stopped = tun2SocksProcessManager.stop(
                 gracePeriodMillis = Tun2proxyStopGracePeriodMillis,
@@ -423,19 +472,12 @@ class WhiteDnsVpnService : VpnService() {
         }.onFailure { error ->
             Log.w(Tag, "Failed to stop tun2proxy", error)
         }
-        val interfaceToClose = vpnInterface
-        vpnInterface = null
-        runCatching {
-            interfaceToClose?.close()
-        }.onFailure { error ->
-            Log.w(Tag, "Failed to close VPN interface", error)
-        }
         runCatching {
             stormDnsProcessManager.stop()
         }.onFailure { error ->
             Log.w(Tag, "Failed to stop DNS engine", error)
         }
-        WhiteDnsRuntimeStateStore.markStopped(
+        if (!preserveFailure) WhiteDnsRuntimeStateStore.markStopped(
             context = applicationContext,
             mode = WhiteDnsRuntimeStateStore.ModeVpn,
             sessionId = currentSessionId,
@@ -489,74 +531,33 @@ class WhiteDnsVpnService : VpnService() {
         splitTunnelMode: String,
         splitTunnelPackages: List<String>,
     ) {
-        val selectedPackages = splitTunnelPackages
-            .asSequence()
-            .map(String::trim)
-            .filter { it.isNotEmpty() && it != packageName }
-            .distinct()
-            .toList()
-
-        when (splitTunnelMode) {
-            WhiteDnsOptions.SplitTunnelModeInclude -> {
-                if (selectedPackages.isEmpty()) {
-                    excludeWhiteDnsApp()
-                    logWarning("No split tunnel apps selected; using full-device VPN routing")
-                    return
-                }
-
-                val allowedCount = selectedPackages.count { appPackage ->
-                    tryAddAllowedApplication(appPackage)
-                }
-                if (allowedCount == 0) {
-                    throw IllegalStateException("No selected split tunnel apps could be routed through the VPN")
-                }
-                logInfo("Split tunnel routes $allowedCount selected app(s) through the VPN")
-            }
-            WhiteDnsOptions.SplitTunnelModeExclude -> {
-                excludeWhiteDnsApp()
-                val excludedCount = selectedPackages.count { appPackage ->
-                    tryAddDisallowedApplication(appPackage, "Unable to bypass $appPackage")
-                }
-                logInfo("Split tunnel bypasses $excludedCount selected app(s)")
-            }
-            else -> {
-                excludeWhiteDnsApp()
+        val routing = vpnApplicationRouting(splitTunnelMode, splitTunnelPackages, packageName)
+        routing.allowedPackages.forEach { requireAllowedApplication(it) }
+        routing.disallowedPackages.forEach { requireDisallowedApplication(it, "Unable to bypass $it") }
+        if (routing.allowedPackages.isNotEmpty()) {
+            logInfo("Split tunnel routes ${routing.allowedPackages.size} selected app(s) through the VPN")
+        } else {
+            logInfo("WhiteDNS app traffic bypasses VPN routing")
+            if (splitTunnelMode == WhiteDnsOptions.SplitTunnelModeExclude) {
+                logInfo("Split tunnel bypasses ${routing.disallowedPackages.size - 1} selected app(s)")
             }
         }
     }
 
-    private fun Builder.excludeWhiteDnsApp() {
-        tryAddDisallowedApplication(packageName, "Unable to exclude WhiteDNS app from VPN")
-    }
-
-    private fun Builder.tryAddAllowedApplication(appPackage: String): Boolean {
-        return runCatching {
+    private fun Builder.requireAllowedApplication(appPackage: String) {
+        runCatching {
             addAllowedApplication(appPackage)
-            true
-        }.getOrElse { error ->
-            logWarning("Unable to route $appPackage through VPN: ${error.message ?: error::class.java.simpleName}")
-            false
+        }.onFailure { error ->
+            throw IllegalStateException("Unable to route $appPackage through VPN", error)
         }
     }
 
-    private fun Builder.tryAddDisallowedApplication(appPackage: String, message: String): Boolean {
-        return runCatching {
+    private fun Builder.requireDisallowedApplication(appPackage: String, message: String) {
+        runCatching {
             addDisallowedApplication(appPackage)
-            true
-        }.getOrElse { error ->
-            logWarning("$message: ${error.message ?: error::class.java.simpleName}")
-            false
+        }.onFailure { error ->
+            throw IllegalStateException(message, error)
         }
-    }
-
-    @SuppressLint("NewApi")
-    private fun clearCloseOnExec(tun: ParcelFileDescriptor) {
-        val flags = Os.fcntlInt(tun.fileDescriptor, OsConstants.F_GETFD, 0)
-        Os.fcntlInt(
-            tun.fileDescriptor,
-            OsConstants.F_SETFD,
-            flags and OsConstants.FD_CLOEXEC.inv(),
-        )
     }
 
     private fun logInfo(message: String) {
@@ -612,7 +613,7 @@ class WhiteDnsVpnService : VpnService() {
         )
         updateForegroundNotification("VPN disconnected")
         reportFailure(failureMessage)
-        stopVpn()
+        stopVpn(preserveFailure = true)
         exitForeground()
         stopSelf()
     }
@@ -652,9 +653,11 @@ class WhiteDnsVpnService : VpnService() {
         private const val ExtraSessionId = "shop.whitedns.client.vpn.extra.SESSION_ID"
         const val TunIpv4Address = "172.19.0.1"
         private const val TunIpv4PrefixLength = 30
+        private const val TunIpv6Address = "fd00:19::1"
         private const val TunDnsServer = "172.19.0.2"
         private const val VpnMtu = 1500
         private const val Tun2proxyStopGracePeriodMillis = 5_000L
+        private const val Tun2proxyStartupTimeoutMillis = 2_000L
         private const val PreviousRuntimeStopTimeoutMillis = 3_000L
         private const val PreviousRuntimeStopPollMillis = 100L
         private const val TrafficNotificationUpdateIntervalMillis = 1_000L

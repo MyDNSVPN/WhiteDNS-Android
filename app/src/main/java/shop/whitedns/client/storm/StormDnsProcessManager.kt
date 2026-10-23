@@ -25,6 +25,7 @@ class StormDnsProcessManager(
 
     private val processLock = Any()
     private var process: Process? = null
+    private var lastExitCode: Int? = null
     private var currentLaunchSpec: StormDnsLaunchSpec? = null
     private var outputDrainThread: Thread? = null
 
@@ -76,6 +77,7 @@ class StormDnsProcessManager(
         onOutput: (String) -> Unit = {},
     ): StormDnsLaunchSpec {
         stop()
+        synchronized(processLock) { lastExitCode = null }
         val engineName = DnsClientEngine.displayName(serverProfile.engine)
         val launchSpec = prepareLaunch(serverProfile, settings)
         onOutput("Runtime prepared")
@@ -167,8 +169,8 @@ class StormDnsProcessManager(
 
     fun exitCodeOrNull(): Int? {
         val activeProcess = synchronized(processLock) {
-            process
-        } ?: return null
+            process ?: return lastExitCode
+        }
         if (activeProcess.isAlive) {
             return null
         }
@@ -177,6 +179,7 @@ class StormDnsProcessManager(
                 return@synchronized null
             }
             val exitCode = activeProcess.exitValue()
+            lastExitCode = exitCode
             process = null
             outputDrainThread = null
             cleanupLaunchFilesLocked()
@@ -215,6 +218,10 @@ class StormDnsProcessManager(
             if (process !== finishedProcess || finishedProcess.isAlive) {
                 return
             }
+            // The output drain can finish before the service polls the child.
+            // Retain its status so a native crash does not become an unhelpful
+            // "process exited" message without the signal/exit code.
+            lastExitCode = finishedProcess.exitValue()
             process = null
             outputDrainThread = null
             cleanupLaunchFilesLocked()

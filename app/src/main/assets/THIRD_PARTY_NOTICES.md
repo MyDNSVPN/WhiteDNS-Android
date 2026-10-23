@@ -91,9 +91,9 @@ SOFTWARE.
 ## tun2proxy
 
 Source: https://github.com/tun2proxy/tun2proxy
-Release: v0.7.21
-Asset: tun2proxy-android-libs.zip
-SHA-256: 25fe0fb6c853cbb8b1c0c58db8eb9b3f9901336d3511edec5650651c1144c11e
+Base release: v0.8.1, commit 27466222b9261d7ef4a4872fc15111cf0d0e95bb
+Built from pinned source with the Android host lifecycle patch in third_party/tun2proxy; stopping the JNI runner returns to Android without terminating the app process.
+Build inputs and per-ABI checksums: third_party/tun2proxy/SOURCE.json and the packaged assets/tun2proxy-build.json.
 License: MIT
 
 MIT License

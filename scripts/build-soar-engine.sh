@@ -7,6 +7,7 @@ host=${NDK_HOST:-linux-x86_64}
 api=${ANDROID_API:-26}
 toolchain="$ndk/toolchains/llvm/prebuilt/$host/bin"
 cd "$root/soar-engine"
+python3 "$root/scripts/android_go_toolchain.py" "$("$go_command" env GOVERSION)"
 "$go_command" mod download
 "$go_command" mod verify
 module=$("$go_command" list -m -f '{{.Dir}}' github.com/getlantern/soar)
